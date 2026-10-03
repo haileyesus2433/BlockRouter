@@ -5,8 +5,7 @@ edition.workspace = true
 rust-version = "1.97.1"
 publish = false
 
-# All integration tests compile into one binary. Add new test files as
-# `mod` lines in main.rs rather than new [[test]] entries.
+# One test binary: add new files as `mod` lines in main.rs.
 [[test]]
 name = "integration"
 path = "main.rs"
