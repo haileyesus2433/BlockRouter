@@ -1,0 +1,17 @@
+[package]
+name = "blockrouter-tests"
+version = "0.1.0"
+edition.workspace = true
+rust-version = "1.97.1"
+publish = false
+
+# All integration tests compile into one binary. Add new test files as
+# `mod` lines in main.rs rather than new [[test]] entries.
+[[test]]
+name = "integration"
+path = "main.rs"
+
+[dev-dependencies]
+blockrouter = { path = "../programs/blockrouter", features = ["no-entrypoint"] }
+anchor-lang = "=1.2.0"
+litesvm = "=0.17.0"

@@ -1,0 +1,16 @@
+# Rust / Anchor
+target/
+.anchor/
+**/*.rs.bk
+test-ledger/
+.surfpool/
+
+# Node
+node_modules/
+dist/
+.yarn/
+
+# Secrets
+.env*
+keys/*.json
+*-keypair.json
