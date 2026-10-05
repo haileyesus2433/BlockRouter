@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANCHOR_VERSION: 1.2.0
+  SOLANA_VERSION: 3.1.10
+  PLATFORM_TOOLS_VERSION: v1.57
+
+jobs:
+  program:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Cache Solana CLI and platform-tools
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.local/share/solana
+            ~/.cache/solana
+          key: solana-${{ env.SOLANA_VERSION }}-${{ env.PLATFORM_TOOLS_VERSION }}
+
+      - name: Install Solana CLI
+        run: |
+          if [ ! -x ~/.local/share/solana/install/active_release/bin/solana ]; then
+            sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
+          fi
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install Anchor CLI
+        run: |
+          mkdir -p ~/.local/bin
+          curl -sSfL -o ~/.local/bin/anchor \
+            "https://github.com/solana-foundation/anchor/releases/download/v${ANCHOR_VERSION}/anchor-${ANCHOR_VERSION}-x86_64-unknown-linux-gnu"
+          chmod +x ~/.local/bin/anchor
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      # The program keypair is not in git, so skip the declare_id check.
+      - name: Build
+        run: anchor build --ignore-keys
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
