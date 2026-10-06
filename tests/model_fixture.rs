@@ -124,6 +124,50 @@ impl ModelFixture {
         self.send(&admin, instruction).unwrap()
     }
 
+    pub fn update_ix(
+        &self,
+        signer: &Keypair,
+        model_id: u16,
+        prompt_rate: u64,
+        completion_rate: u64,
+    ) -> Instruction {
+        Instruction {
+            program_id: address(blockrouter::id()),
+            accounts: blockrouter::accounts::UpdateModelPrice {
+                authority: pubkey(signer.pubkey()),
+                config: self.config_key,
+                model: Self::model_pda(model_id).0,
+            }
+            .to_account_metas(None),
+            data: blockrouter::instruction::UpdateModelPrice {
+                prompt_rate,
+                completion_rate,
+            }
+            .data(),
+        }
+    }
+
+    pub fn update(
+        &mut self,
+        model_id: u16,
+        prompt_rate: u64,
+        completion_rate: u64,
+    ) -> TransactionMetadata {
+        let admin = self.admin.insecure_clone();
+        let instruction = self.update_ix(&admin, model_id, prompt_rate, completion_rate);
+        self.send(&admin, instruction).unwrap()
+    }
+
+    pub fn now(&self) -> i64 {
+        self.svm.get_sysvar::<Clock>().unix_timestamp
+    }
+
+    pub fn warp(&mut self, secs: i64) {
+        let mut clock = self.svm.get_sysvar::<Clock>();
+        clock.unix_timestamp += secs;
+        self.svm.set_sysvar(&clock);
+    }
+
     pub fn read_model(&self, model_id: u16) -> Model {
         let account = self
             .svm

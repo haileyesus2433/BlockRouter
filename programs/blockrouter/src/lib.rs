@@ -50,4 +50,16 @@ pub mod blockrouter {
             completion_rate,
         )
     }
+
+    pub fn update_model_price(
+        ctx: Context<UpdateModelPrice>,
+        prompt_rate: u64,
+        completion_rate: u64,
+    ) -> Result<()> {
+        instructions::update_model_price::handle_update_model_price(
+            ctx,
+            prompt_rate,
+            completion_rate,
+        )
+    }
 }
