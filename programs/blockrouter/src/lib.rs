@@ -28,4 +28,8 @@ pub mod blockrouter {
             duration_secs,
         )
     }
+
+    pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+        instructions::deposit::handle_deposit(ctx, amount)
+    }
 }
