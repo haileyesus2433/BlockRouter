@@ -1,5 +1,7 @@
 mod deposit;
+mod model_fixture;
 mod open_session;
+mod register_model;
 mod smoke;
 mod state_layout;
 mod vault_fixture;

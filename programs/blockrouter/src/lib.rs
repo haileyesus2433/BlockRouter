@@ -36,4 +36,18 @@ pub mod blockrouter {
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         instructions::withdraw::handle_withdraw(ctx, amount)
     }
+
+    pub fn register_model(
+        ctx: Context<RegisterModel>,
+        model_id: u16,
+        prompt_rate: u64,
+        completion_rate: u64,
+    ) -> Result<()> {
+        instructions::register_model::handle_register_model(
+            ctx,
+            model_id,
+            prompt_rate,
+            completion_rate,
+        )
+    }
 }
