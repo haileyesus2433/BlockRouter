@@ -704,6 +704,9 @@ dependencies = [
  "anchor-lang",
  "blockrouter",
  "litesvm",
+ "solana-account",
+ "solana-keypair",
+ "solana-transaction",
 ]
 
 [[package]]
