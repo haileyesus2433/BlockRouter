@@ -14,3 +14,6 @@ path = "main.rs"
 blockrouter = { path = "../programs/blockrouter", features = ["no-entrypoint"] }
 anchor-lang = "=1.2.0"
 litesvm = "=0.17.0"
+solana-account = "=4.7.0"
+solana-keypair = "=3.1.2"
+solana-transaction = { version = "=4.3.0", features = ["wincode"] }
