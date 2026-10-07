@@ -28,4 +28,38 @@ pub mod blockrouter {
             duration_secs,
         )
     }
+
+    pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+        instructions::deposit::handle_deposit(ctx, amount)
+    }
+
+    pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+        instructions::withdraw::handle_withdraw(ctx, amount)
+    }
+
+    pub fn register_model(
+        ctx: Context<RegisterModel>,
+        model_id: u16,
+        prompt_rate: u64,
+        completion_rate: u64,
+    ) -> Result<()> {
+        instructions::register_model::handle_register_model(
+            ctx,
+            model_id,
+            prompt_rate,
+            completion_rate,
+        )
+    }
+
+    pub fn update_model_price(
+        ctx: Context<UpdateModelPrice>,
+        prompt_rate: u64,
+        completion_rate: u64,
+    ) -> Result<()> {
+        instructions::update_model_price::handle_update_model_price(
+            ctx,
+            prompt_rate,
+            completion_rate,
+        )
+    }
 }

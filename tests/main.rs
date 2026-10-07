@@ -1,3 +1,10 @@
+mod deposit;
+mod model_fixture;
 mod open_session;
+mod register_model;
 mod smoke;
 mod state_layout;
+mod update_model_price;
+mod vault_fixture;
+mod vault_invariants;
+mod withdraw;
