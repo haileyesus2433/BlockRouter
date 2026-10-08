@@ -80,4 +80,8 @@ pub mod blockrouter {
             price_timelock_secs,
         )
     }
+
+    pub fn initialize_vault(ctx: Context<InitializeVault>) -> Result<()> {
+        instructions::initialize_vault::handle_initialize_vault(ctx)
+    }
 }
