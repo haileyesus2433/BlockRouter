@@ -62,4 +62,22 @@ pub mod blockrouter {
             completion_rate,
         )
     }
+
+    pub fn initialize_config(
+        ctx: Context<InitializeConfig>,
+        treasury: Pubkey,
+        provider: Pubkey,
+        fee_bps: u16,
+        dispute_window_secs: i64,
+        price_timelock_secs: i64,
+    ) -> Result<()> {
+        instructions::initialize_config::handle_initialize_config(
+            ctx,
+            treasury,
+            provider,
+            fee_bps,
+            dispute_window_secs,
+            price_timelock_secs,
+        )
+    }
 }

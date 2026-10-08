@@ -1,4 +1,5 @@
 mod deposit;
+mod initialize_config;
 mod model_fixture;
 mod open_session;
 mod register_model;
