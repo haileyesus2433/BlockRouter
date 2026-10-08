@@ -721,6 +721,7 @@ dependencies = [
  "litesvm-token",
  "solana-account",
  "solana-keypair",
+ "solana-system-interface 3.3.0",
  "solana-transaction",
 ]
 

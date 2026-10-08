@@ -75,6 +75,63 @@ pub fn create_funded_ata(
     ata
 }
 
+pub fn vault_pda(owner: &Address, mint: &Address) -> Pubkey {
+    Pubkey::find_program_address(
+        &[VAULT_SEED, pubkey(*owner).as_ref(), pubkey(*mint).as_ref()],
+        &blockrouter::id(),
+    )
+    .0
+}
+
+pub fn ata_address(owner: &Address, mint: &Address, token_program: &Address) -> Address {
+    let (ata, _) = Pubkey::find_program_address(
+        &[
+            pubkey(*owner).as_ref(),
+            pubkey(*token_program).as_ref(),
+            pubkey(*mint).as_ref(),
+        ],
+        &anchor_spl::associated_token::ID,
+    );
+    address(ata)
+}
+
+pub fn initialize_vault_ix(
+    owner: &Keypair,
+    mint: &Address,
+    token_program: &Address,
+) -> Instruction {
+    let vault = vault_pda(&owner.pubkey(), mint);
+    Instruction {
+        program_id: address(blockrouter::id()),
+        accounts: blockrouter::accounts::InitializeVault {
+            user: pubkey(owner.pubkey()),
+            vault,
+            mint: pubkey(*mint),
+            vault_ata: pubkey(ata_address(&address(vault), mint, token_program)),
+            token_program: pubkey(*token_program),
+            associated_token_program: anchor_spl::associated_token::ID,
+            system_program: anchor_lang::solana_program::system_program::ID,
+        }
+        .to_account_metas(None),
+        data: blockrouter::instruction::InitializeVault {}.data(),
+    }
+}
+
+pub fn send_tx(
+    svm: &mut LiteSVM,
+    signer: &Keypair,
+    instruction: Instruction,
+) -> Result<TransactionMetadata, Box<FailedTransactionMetadata>> {
+    svm.expire_blockhash();
+    let tx = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&signer.pubkey()),
+        &[signer],
+        svm.latest_blockhash(),
+    );
+    svm.send_transaction(tx).map_err(Box::new)
+}
+
 pub struct VaultFixture {
     pub svm: LiteSVM,
     pub alice: Keypair,
@@ -111,28 +168,12 @@ impl VaultFixture {
             .unwrap();
         let alice_ata = create_funded_ata(&mut svm, &alice, &alice, &mint, &token_program);
 
-        let (vault_key, bump) = Pubkey::find_program_address(
-            &[
-                VAULT_SEED,
-                pubkey(alice.pubkey()).as_ref(),
-                pubkey(mint).as_ref(),
-            ],
-            &blockrouter::id(),
-        );
-        let vault = Vault {
-            owner: pubkey(alice.pubkey()),
-            mint: pubkey(mint),
-            balance: 0,
-            total_reserved: 0,
-            session_counter: 0,
-            bump,
-        };
-        seed_account(&mut svm, vault_key, &vault);
-        let vault_ata = CreateAssociatedTokenAccount::new(&mut svm, &alice, &mint)
-            .owner(&address(vault_key))
-            .token_program_id(&token_program)
-            .send()
-            .unwrap();
+        let vault_key = vault_pda(&alice.pubkey(), &mint);
+        let vault_ata = ata_address(&address(vault_key), &mint, &token_program);
+        let instruction = initialize_vault_ix(&alice, &mint, &token_program);
+        send_tx(&mut svm, &alice, instruction).unwrap();
+        let account = svm.get_account(&address(vault_key)).unwrap();
+        let vault = Vault::try_deserialize(&mut account.data.as_slice()).unwrap();
 
         Self {
             svm,
@@ -218,14 +259,7 @@ impl VaultFixture {
         signer: &Keypair,
         instruction: Instruction,
     ) -> Result<TransactionMetadata, Box<FailedTransactionMetadata>> {
-        self.svm.expire_blockhash();
-        let tx = Transaction::new_signed_with_payer(
-            &[instruction],
-            Some(&signer.pubkey()),
-            &[signer],
-            self.svm.latest_blockhash(),
-        );
-        self.svm.send_transaction(tx).map_err(Box::new)
+        send_tx(&mut self.svm, signer, instruction)
     }
 
     pub fn deposit(&mut self, amount: u64) -> TransactionMetadata {

@@ -18,4 +18,5 @@ solana-account = "=4.7.0"
 solana-keypair = "=3.1.2"
 solana-transaction = { version = "=4.3.0", features = ["wincode"] }
 litesvm-token = { version = "=0.17.0", features = ["token-2022"] }
-anchor-spl = { version = "=1.2.0", default-features = false, features = ["token", "token_2022"] }
+anchor-spl = { version = "=1.2.0", default-features = false, features = ["associated_token", "token", "token_2022"] }
+solana-system-interface = "=3.3.0"

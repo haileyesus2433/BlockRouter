@@ -78,4 +78,6 @@ pub enum BlockRouterError {
     NotDisputed,
     #[msg("Payer account does not match the escrow")]
     PayerAccountMismatch,
+    #[msg("Mint uses an unsupported Token-2022 extension")]
+    UnsupportedMint,
 }
