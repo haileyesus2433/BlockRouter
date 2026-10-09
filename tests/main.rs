@@ -1,4 +1,6 @@
+mod common;
 mod deposit;
+mod harness;
 mod initialize_config;
 mod initialize_vault;
 mod model_fixture;
