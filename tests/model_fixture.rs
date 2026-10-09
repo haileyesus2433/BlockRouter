@@ -11,12 +11,12 @@ use litesvm::{
     LiteSVM,
 };
 use solana_keypair::{Address, Keypair, Signer};
-use solana_transaction::{Instruction, InstructionError, Transaction, TransactionError};
+use solana_transaction::{Instruction, InstructionError, TransactionError};
 
-use crate::vault_fixture::{address, pubkey, seed_account};
+use crate::common::{address, pubkey, seed_account, PRICE_TIMELOCK_SECS};
 
-pub const NOW: i64 = 1_800_000_000;
-pub const TIMELOCK_SECS: i64 = 3_600;
+pub use crate::common::NOW;
+pub const TIMELOCK_SECS: i64 = PRICE_TIMELOCK_SECS;
 
 pub struct ModelFixture {
     pub svm: LiteSVM,
@@ -27,15 +27,7 @@ pub struct ModelFixture {
 
 impl ModelFixture {
     pub fn new() -> Self {
-        let mut svm = LiteSVM::new();
-        svm.add_program(
-            address(blockrouter::id()),
-            include_bytes!(concat!(
-                env!("CARGO_TARGET_TMPDIR"),
-                "/../deploy/blockrouter.so"
-            )),
-        )
-        .unwrap();
+        let mut svm = crate::common::new_svm();
         let mut clock = svm.get_sysvar::<Clock>();
         clock.unix_timestamp = NOW;
         svm.set_sysvar(&clock);
@@ -70,7 +62,12 @@ impl ModelFixture {
     }
 
     pub fn model_pda(model_id: u16) -> (Pubkey, u8) {
-        Pubkey::find_program_address(&[MODEL_SEED, &model_id.to_le_bytes()], &blockrouter::id())
+        let key = crate::common::model_pda(model_id);
+        let (_, bump) = Pubkey::find_program_address(
+            &[MODEL_SEED, &model_id.to_le_bytes()],
+            &blockrouter::id(),
+        );
+        (key, bump)
     }
 
     pub fn register_ix(
@@ -103,14 +100,7 @@ impl ModelFixture {
         signer: &Keypair,
         instruction: Instruction,
     ) -> Result<TransactionMetadata, Box<FailedTransactionMetadata>> {
-        self.svm.expire_blockhash();
-        let tx = Transaction::new_signed_with_payer(
-            &[instruction],
-            Some(&signer.pubkey()),
-            &[signer],
-            self.svm.latest_blockhash(),
-        );
-        self.svm.send_transaction(tx).map_err(Box::new)
+        crate::common::send_tx(&mut self.svm, signer, instruction)
     }
 
     pub fn register(

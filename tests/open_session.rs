@@ -1,7 +1,6 @@
 use anchor_lang::{
     prelude::{Clock, Pubkey},
-    AccountDeserialize, AccountSerialize, AnchorDeserialize, Discriminator, InstructionData,
-    ToAccountMetas,
+    AccountDeserialize, AnchorDeserialize, Discriminator, InstructionData, ToAccountMetas,
 };
 use blockrouter::{
     constants::{CONFIG_SEED, MAX_SESSION_SECS, MIN_SESSION_SECS, SESSION_SEED, VAULT_SEED},
@@ -14,34 +13,10 @@ use litesvm::{
     LiteSVM,
 };
 use solana_account::Account;
-use solana_keypair::{Address, Keypair, Signer};
+use solana_keypair::{Keypair, Signer};
 use solana_transaction::{Instruction, InstructionError, Transaction, TransactionError};
 
-const NOW: i64 = 1_800_000_000;
-
-fn address(key: Pubkey) -> Address {
-    Address::from(key.to_bytes())
-}
-
-fn pubkey(key: Address) -> Pubkey {
-    Pubkey::new_from_array(key.to_bytes())
-}
-
-fn seed_account(svm: &mut LiteSVM, key: Pubkey, state: &impl AccountSerialize) {
-    let mut data = Vec::new();
-    state.try_serialize(&mut data).unwrap();
-    svm.set_account(
-        address(key),
-        Account {
-            lamports: svm.minimum_balance_for_rent_exemption(data.len()),
-            data,
-            owner: address(blockrouter::id()),
-            executable: false,
-            rent_epoch: 0,
-        },
-    )
-    .unwrap();
-}
+use crate::common::{address, new_svm, pubkey, seed_account, NOW};
 
 struct Fixture {
     svm: LiteSVM,
@@ -55,15 +30,7 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let mut svm = LiteSVM::new();
-        svm.add_program(
-            address(blockrouter::id()),
-            include_bytes!(concat!(
-                env!("CARGO_TARGET_TMPDIR"),
-                "/../deploy/blockrouter.so"
-            )),
-        )
-        .unwrap();
+        let mut svm = new_svm();
         let mut clock = svm.get_sysvar::<Clock>();
         clock.unix_timestamp = NOW;
         svm.set_sysvar(&clock);

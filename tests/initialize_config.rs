@@ -12,9 +12,9 @@ use litesvm::{
 use solana_keypair::{Address, Keypair, Signer};
 use solana_transaction::{Instruction, InstructionError, Transaction, TransactionError};
 
-use crate::vault_fixture::{address, events, pubkey};
-
-const UPGRADEABLE_LOADER: Pubkey = anchor_lang::solana_program::bpf_loader_upgradeable::ID;
+use crate::common::{
+    address, events, new_svm, program_data_address, pubkey, set_upgrade_authority,
+};
 
 struct Args {
     treasury: Pubkey,
@@ -44,19 +44,10 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let mut svm = LiteSVM::new();
-        svm.add_program(
-            address(blockrouter::id()),
-            include_bytes!(concat!(
-                env!("CARGO_TARGET_TMPDIR"),
-                "/../deploy/blockrouter.so"
-            )),
-        )
-        .unwrap();
+        let mut svm = new_svm();
         let admin = Keypair::new();
         svm.airdrop(&admin.pubkey(), 10_000_000_000).unwrap();
-        let (program_data, _) =
-            Pubkey::find_program_address(&[blockrouter::id().as_ref()], &UPGRADEABLE_LOADER);
+        let program_data = program_data_address();
         let mut fixture = Self {
             svm,
             admin,
@@ -67,18 +58,8 @@ impl Fixture {
         fixture
     }
 
-    // ProgramData layout: u32 tag, u64 slot, Option<Pubkey> authority.
     fn set_upgrade_authority(&mut self, authority: Option<Pubkey>) {
-        let key = address(self.program_data);
-        let mut account = self.svm.get_account(&key).unwrap();
-        match authority {
-            Some(authority) => {
-                account.data[12] = 1;
-                account.data[13..45].copy_from_slice(authority.as_ref());
-            }
-            None => account.data[12..45].fill(0),
-        }
-        self.svm.set_account(key, account).unwrap();
+        set_upgrade_authority(&mut self.svm, authority);
     }
 
     fn config_key() -> Pubkey {
