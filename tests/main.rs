@@ -3,6 +3,7 @@ mod initialize_config;
 mod initialize_vault;
 mod model_fixture;
 mod open_session;
+mod reclaim_expired_session;
 mod register_model;
 mod smoke;
 mod state_layout;
