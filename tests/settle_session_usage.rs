@@ -187,6 +187,12 @@ impl Fixture {
             .unwrap();
         let after = read::<Vault>(&self.env.svm, self.vault);
         assert_eq!(after.balance, before.balance - expected);
+        let available_before = before.balance.checked_sub(before.total_reserved).unwrap();
+        let available_after = after.balance.checked_sub(after.total_reserved).unwrap();
+        assert_eq!(
+            available_after.checked_sub(available_before).unwrap(),
+            session.reserved_amount.checked_sub(expected).unwrap()
+        );
         assert_eq!(
             after.total_reserved,
             before.total_reserved - session.reserved_amount
@@ -365,8 +371,16 @@ fn excessive_charge_is_rejected() {
 #[test]
 fn attacker_provider_is_rejected() {
     let mut f = Fixture::new();
-    let mut ix = f.ix(0, 0);
-    ix.accounts[6].pubkey = f.env.ata(Actor::Attacker);
+    let attacker_ata = f.env.ata(Actor::Attacker);
+    let attacker_account = get_spl_account::<TokenAccount>(&f.env.svm, &attacker_ata).unwrap();
+    assert_eq!(
+        attacker_account.owner,
+        f.env.keypair(Actor::Attacker).pubkey()
+    );
+    assert_eq!(attacker_account.mint, f.env.mint);
+    // A real positive charge would be paid here if destination authorization failed.
+    let mut ix = f.ix(1_000_000, 0);
+    ix.accounts[6].pubkey = attacker_ata;
     f.error(ix, BlockRouterError::UnauthorizedProvider);
 }
 #[test]
@@ -651,4 +665,48 @@ fn charge_limit_check_precedes_provider_check() {
     let mut ix = f.ix(4_000_000, 0);
     ix.accounts[6].pubkey = f.env.ata(Actor::Attacker);
     f.error(ix, BlockRouterError::ChargeExceedsReservation);
+}
+
+#[test]
+fn different_sessions_authorized_relayer_cannot_settle_this_session() {
+    let mut f = Fixture::new();
+    let next_id = read::<Vault>(&f.env.svm, f.vault).session_counter;
+    let other_session = common::session_pda(&f.vault, next_id);
+    let other_relayer = f.env.key(Actor::Attacker);
+    let open = Instruction {
+        program_id: address(blockrouter::id()),
+        accounts: blockrouter::accounts::OpenSession {
+            user: f.env.key(Actor::Alice),
+            vault: f.vault,
+            session: other_session,
+            config: common::config_pda(),
+            system_program: anchor_lang::solana_program::system_program::ID,
+            model: common::model_pda(MODEL_ID),
+        }
+        .to_account_metas(None),
+        data: blockrouter::instruction::OpenSession {
+            session_id: next_id,
+            reserved_amount: 100,
+            relayer: other_relayer,
+            duration_secs: 3_600,
+        }
+        .data(),
+    };
+    f.env.send(Actor::Alice, open).unwrap();
+    let first = read::<Session>(&f.env.svm, f.session);
+    let second = read::<Session>(&f.env.svm, other_session);
+    assert_eq!(first.relayer, f.env.key(Actor::Relayer));
+    assert_eq!(second.relayer, other_relayer);
+    assert_ne!(first.relayer, second.relayer);
+    assert_eq!(second.payer_account, f.vault);
+    assert_eq!(read::<Vault>(&f.env.svm, f.vault).total_reserved, 400);
+    let other_before = f.env.svm.get_account(&address(other_session));
+    let mut settle = f.ix(1_000_000, 0);
+    settle.accounts[0].pubkey = address(other_relayer);
+    f.failure(
+        Actor::Attacker,
+        settle,
+        InstructionError::Custom(u32::from(BlockRouterError::UnauthorizedRelayer)),
+    );
+    assert_eq!(f.env.svm.get_account(&address(other_session)), other_before);
 }
