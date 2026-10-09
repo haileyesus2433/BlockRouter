@@ -38,6 +38,7 @@ impl Fixture {
             config_key,
             session_key: Pubkey::default(),
         };
+        crate::common::seed_model(&mut fixture.vault.svm, 42);
         fixture.set_paused(false);
         fixture.session_key = fixture.open(RESERVATION);
         fixture
@@ -81,6 +82,7 @@ impl Fixture {
                 session,
                 config: self.config_key,
                 system_program: anchor_lang::solana_program::system_program::ID,
+                model: crate::common::model_pda(42),
             }
             .to_account_metas(None),
             data: blockrouter::instruction::OpenSession {

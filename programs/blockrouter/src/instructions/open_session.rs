@@ -1,9 +1,11 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{CONFIG_SEED, MAX_SESSION_SECS, MIN_SESSION_SECS, SESSION_SEED, VAULT_SEED},
+    constants::{
+        CONFIG_SEED, MAX_SESSION_SECS, MIN_SESSION_SECS, MODEL_SEED, SESSION_SEED, VAULT_SEED,
+    },
     errors::BlockRouterError,
-    state::{Config, PayerKind, Session, Vault},
+    state::{Config, Model, PayerKind, Session, Vault},
 };
 
 #[derive(Accounts)]
@@ -28,6 +30,11 @@ pub struct OpenSession<'info> {
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Account<'info, Config>,
     pub system_program: Program<'info, System>,
+    #[account(
+        seeds = [MODEL_SEED, &model.model_id.to_le_bytes()],
+        bump = model.bump
+    )]
+    pub model: Account<'info, Model>,
 }
 
 pub fn handler(
@@ -80,6 +87,11 @@ pub fn handler(
         .checked_add(duration_secs)
         .ok_or(BlockRouterError::MathOverflow)?;
 
+    require!(
+        ctx.accounts.model.is_active,
+        BlockRouterError::ModelInactive
+    );
+
     ctx.accounts.session.set_inner(Session {
         payer_account: vault.key(),
         payer_kind: PayerKind::Vault,
@@ -89,6 +101,7 @@ pub fn handler(
         session_id,
         expires_at,
         bump: ctx.bumps.session,
+        model_id: ctx.accounts.model.model_id,
     });
     vault.total_reserved = total_reserved;
     vault.session_counter = session_counter;
@@ -101,6 +114,7 @@ pub fn handler(
         relayer,
         reserved_amount,
         expires_at,
+        model_id: ctx.accounts.model.model_id,
     });
     Ok(())
 }
@@ -114,4 +128,5 @@ pub struct SessionOpened {
     pub relayer: Pubkey,
     pub reserved_amount: u64,
     pub expires_at: i64,
+    pub model_id: u16,
 }

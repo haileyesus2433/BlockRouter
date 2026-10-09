@@ -6,7 +6,7 @@ use blockrouter::{
     constants::{CONFIG_SEED, MAX_SESSION_SECS, MIN_SESSION_SECS, SESSION_SEED, VAULT_SEED},
     errors::BlockRouterError,
     instructions::SessionOpened,
-    state::{Config, PayerKind, Session, Vault},
+    state::{Config, Model, PayerKind, Session, Vault},
 };
 use litesvm::{
     types::{FailedTransactionMetadata, TransactionMetadata},
@@ -16,7 +16,7 @@ use solana_account::Account;
 use solana_keypair::{Keypair, Signer};
 use solana_transaction::{Instruction, InstructionError, Transaction, TransactionError};
 
-use crate::common::{address, new_svm, pubkey, seed_account, NOW};
+use crate::common::{address, new_svm, pubkey, seed_account, seed_model, NOW};
 
 struct Fixture {
     svm: LiteSVM,
@@ -26,6 +26,7 @@ struct Fixture {
     vault: Vault,
     config: Config,
     relayer: Pubkey,
+    model_key: Pubkey,
 }
 
 impl Fixture {
@@ -65,6 +66,7 @@ impl Fixture {
         };
         seed_account(&mut svm, vault_key, &vault);
         seed_account(&mut svm, config_key, &config);
+        let model_key = seed_model(&mut svm, 42);
         Self {
             svm,
             user,
@@ -73,6 +75,7 @@ impl Fixture {
             vault,
             config,
             relayer: Pubkey::new_unique(),
+            model_key,
         }
     }
 
@@ -101,6 +104,7 @@ impl Fixture {
                 session: self.session_pda(session_id).0,
                 config: self.config_key,
                 system_program: anchor_lang::solana_program::system_program::ID,
+                model: self.model_key,
             }
             .to_account_metas(None),
             data: blockrouter::instruction::OpenSession {
@@ -154,6 +158,10 @@ impl Fixture {
         assert_eq!(session.session_id, id);
         assert_eq!(session.expires_at, NOW + duration);
         assert_eq!(session.bump, self.session_pda(id).1);
+        assert_eq!(
+            session.model_id,
+            crate::common::read::<Model>(&self.svm, self.model_key).model_id
+        );
         let after = self.read_vault();
         assert_eq!(after.balance, before.balance);
         assert_eq!(after.total_reserved, before.total_reserved + amount);
@@ -168,6 +176,8 @@ impl Fixture {
         let before = self.svm.get_account(&address(self.vault_key)).unwrap();
         let session_key = instruction.accounts[2].pubkey;
         let session_before = self.svm.get_account(&session_key);
+        let model_before = self.svm.get_account(&address(self.model_key));
+        let config_before = self.svm.get_account(&address(self.config_key));
         let failure = self.send(instruction).unwrap_err();
         assert_eq!(
             failure.err,
@@ -177,6 +187,11 @@ impl Fixture {
         );
         assert_eq!(self.svm.get_account(&address(self.vault_key)), Some(before));
         assert_eq!(self.svm.get_account(&session_key), session_before);
+        assert_eq!(self.svm.get_account(&address(self.model_key)), model_before);
+        assert_eq!(
+            self.svm.get_account(&address(self.config_key)),
+            config_before
+        );
     }
 
     fn assert_error(&mut self, id: u64, amount: u64, duration: i64, error: BlockRouterError) {
@@ -332,6 +347,7 @@ fn emits_session_opened() {
     assert_eq!(event.relayer, fixture.relayer);
     assert_eq!(event.reserved_amount, 5);
     assert_eq!(event.expires_at, NOW + 120);
+    assert_eq!(event.model_id, 42);
 }
 
 #[test]
@@ -426,4 +442,93 @@ fn paused_check_precedes_other_handler_checks() {
         .airdrop(&fixture.user.pubkey(), 1_000_000_000)
         .unwrap();
     fixture.assert_error(8, 0, 0, BlockRouterError::ProtocolPaused);
+}
+
+#[test]
+fn selected_model_id_is_stored() {
+    let mut fixture = Fixture::new();
+    fixture.model_key = seed_model(&mut fixture.svm, u16::MAX);
+    let instruction = fixture.instruction(7, 5, 120);
+    assert!(!instruction.accounts[5].is_writable);
+    assert!(!instruction.accounts[5].is_signer);
+    fixture.assert_success(5, 120);
+    assert_eq!(fixture.read_session(7).model_id, u16::MAX);
+}
+
+#[test]
+fn two_models_produce_distinct_immutable_session_bindings() {
+    let mut fixture = Fixture::new();
+    fixture.assert_success(5, 120);
+    let first_before = fixture.svm.get_account(&address(fixture.session_pda(7).0));
+    fixture.model_key = seed_model(&mut fixture.svm, 43);
+    fixture.assert_success(5, 120);
+    assert_eq!(fixture.read_session(7).model_id, 42);
+    assert_eq!(fixture.read_session(8).model_id, 43);
+    assert_eq!(
+        fixture.svm.get_account(&address(fixture.session_pda(7).0)),
+        first_before
+    );
+}
+
+#[test]
+fn inactive_model_is_rejected_without_state_changes() {
+    let mut fixture = Fixture::new();
+    let mut model = crate::common::read::<Model>(&fixture.svm, fixture.model_key);
+    model.is_active = false;
+    seed_account(&mut fixture.svm, fixture.model_key, &model);
+    fixture.assert_error(7, 5, 120, BlockRouterError::ModelInactive);
+}
+
+#[test]
+fn wrong_model_pda_is_rejected_without_state_changes() {
+    let mut fixture = Fixture::new();
+    let model = crate::common::read::<Model>(&fixture.svm, fixture.model_key);
+    fixture.model_key = Pubkey::new_unique();
+    seed_account(&mut fixture.svm, fixture.model_key, &model);
+    let instruction = fixture.instruction(7, 5, 120);
+    fixture.assert_failure(
+        instruction,
+        u32::from(anchor_lang::error::ErrorCode::ConstraintSeeds),
+    );
+}
+
+#[test]
+fn missing_model_account_meta_is_rejected_without_state_changes() {
+    let mut fixture = Fixture::new();
+    let mut instruction = fixture.instruction(7, 5, 120);
+    instruction.accounts.pop();
+    fixture.assert_failure(
+        instruction,
+        u32::from(anchor_lang::error::ErrorCode::AccountNotEnoughKeys),
+    );
+}
+
+#[test]
+fn uninitialized_model_account_is_rejected_without_state_changes() {
+    let mut fixture = Fixture::new();
+    fixture.model_key = crate::common::model_pda(43);
+    let instruction = fixture.instruction(7, 5, 120);
+    fixture.assert_failure(
+        instruction,
+        u32::from(anchor_lang::error::ErrorCode::AccountNotInitialized),
+    );
+}
+
+#[test]
+fn incorrectly_owned_model_is_rejected_without_state_changes() {
+    let mut fixture = Fixture::new();
+    let mut account = fixture
+        .svm
+        .get_account(&address(fixture.model_key))
+        .unwrap();
+    account.owner = address(anchor_lang::solana_program::system_program::ID);
+    fixture
+        .svm
+        .set_account(address(fixture.model_key), account)
+        .unwrap();
+    let instruction = fixture.instruction(7, 5, 120);
+    fixture.assert_failure(
+        instruction,
+        u32::from(anchor_lang::error::ErrorCode::AccountOwnedByWrongProgram),
+    );
 }
