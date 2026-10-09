@@ -80,4 +80,6 @@ pub enum BlockRouterError {
     PayerAccountMismatch,
     #[msg("Mint uses an unsupported Token-2022 extension")]
     UnsupportedMint,
+    #[msg("Model does not match the session binding")]
+    SessionModelMismatch,
 }

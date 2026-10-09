@@ -7,6 +7,7 @@ mod model_fixture;
 mod open_session;
 mod reclaim_expired_session;
 mod register_model;
+mod settle_session_usage;
 mod smoke;
 mod state_layout;
 mod update_model_price;
