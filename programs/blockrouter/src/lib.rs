@@ -29,6 +29,10 @@ pub mod blockrouter {
         )
     }
 
+    pub fn reclaim_expired_session(ctx: Context<ReclaimExpiredSession>) -> Result<()> {
+        instructions::reclaim_expired_session::handle_reclaim_expired_session(ctx)
+    }
+
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         instructions::deposit::handle_deposit(ctx, amount)
     }
