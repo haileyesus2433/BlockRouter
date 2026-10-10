@@ -27,7 +27,7 @@ import {
   findVaultPda,
 } from "@blockrouter/client";
 
-const DEPLOYMENT = "deployments/devnet.json";
+const DEPLOYMENT = process.env.DEPLOYMENT ?? "deployments/devnet.json";
 const WALLET = process.env.WALLET ?? "keys/devnet-deployer.json";
 const DEMO_WALLET = process.env.DEMO_WALLET ?? "keys/demo-user.json";
 const RPC_URL = process.env.RPC_URL ?? "https://api.devnet.solana.com";
@@ -66,6 +66,11 @@ async function main() {
   requireFile(WALLET, "Set WALLET to the program upgrade authority keypair.");
   requireFile(DEMO_WALLET, `Create one with: solana-keygen new -o ${DEMO_WALLET}`);
 
+  if (!existsSync(DEPLOYMENT)) {
+    // Local deployments start from the devnet template; mints are created fresh.
+    const template: Deployment = JSON.parse(await readFile("deployments/devnet.json", "utf8"));
+    await writeFile(DEPLOYMENT, `${JSON.stringify({ ...template, cluster: "localnet", mockUsdtMint: null }, null, 2)}\n`);
+  }
   const deployment: Deployment = JSON.parse(await readFile(DEPLOYMENT, "utf8"));
   if (deployment.programId !== BLOCKROUTER_PROGRAM_ADDRESS) {
     throw new Error(
@@ -199,6 +204,12 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  let current: unknown = error;
+  while (current instanceof Error) {
+    console.error(current.message);
+    const logs = (current as { context?: { logs?: string[] } }).context?.logs;
+    if (logs) console.error(logs.join("\n"));
+    current = current.cause;
+  }
   process.exit(1);
 });
