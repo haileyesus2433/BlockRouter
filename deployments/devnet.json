@@ -1,0 +1,15 @@
+{
+  "cluster": "devnet",
+  "programId": "7maTNWbtCpuCXeRUVCNDR2a9YU7kaeUqtvrqz4ustyyi",
+  "usdcMint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  "mockUsdtMint": null,
+  "config": {
+    "feeBps": 250,
+    "disputeWindowSecs": 86400,
+    "priceTimelockSecs": 3600
+  },
+  "models": [
+    { "id": 1, "alias": "deepseek-v3", "promptRate": 270000, "completionRate": 1100000 },
+    { "id": 2, "alias": "llama-3.3-70b", "promptRate": 590000, "completionRate": 790000 }
+  ]
+}

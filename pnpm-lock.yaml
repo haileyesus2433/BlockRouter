@@ -8,6 +8,24 @@ importers:
 
   .:
     devDependencies:
+      '@blockrouter/client':
+        specifier: workspace:*
+        version: link:client
+      '@solana-program/system':
+        specifier: 0.15.0
+        version: 0.15.0(@solana/kit@8.4.0(typescript@7.0.2))
+      '@solana-program/token':
+        specifier: 0.17.0
+        version: 0.17.0(@solana/kit@8.4.0(typescript@7.0.2))
+      '@solana/kit':
+        specifier: 8.4.0
+        version: 8.4.0(typescript@7.0.2)
+      '@solana/kit-plugin-rpc':
+        specifier: 0.19.0
+        version: 0.19.0(@solana/kit@8.4.0(typescript@7.0.2))
+      '@solana/kit-plugin-signer':
+        specifier: 0.19.0
+        version: 0.19.0(@solana/kit@8.4.0(typescript@7.0.2))
       '@types/node':
         specifier: 26.6.4
         version: 26.6.4
@@ -239,6 +257,16 @@ packages:
     resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
     engines: {node: '>= 20.19.0'}
 
+  '@solana-program/system@0.15.0':
+    resolution: {integrity: sha512-xE08wZCyNRhOaO/XNRd9A3kSLfUrTe/BnmAHhql8uqc2eriNy2ZmnvaGRrs0m+kOSihvUbANzHljmJsTzGL5kg==}
+    peerDependencies:
+      '@solana/kit': ^8.3.0
+
+  '@solana-program/token@0.17.0':
+    resolution: {integrity: sha512-l7EhF3lCWXXdOllGI8qnbF4Pj7pCT/5zJTW2lPsNUQfa7G28pnFhSssHW2GCW7dzGttSHgPdJYdQRB5rvQoN9Q==}
+    peerDependencies:
+      '@solana/kit': ^8.3.0
+
   '@solana/accounts@8.4.0':
     resolution: {integrity: sha512-YklERWeG5UD2fzxR0zwWgzCVyuHRqg6eTIyGBAe8hOWIim8TYS1aPBVFAlVkSZiAXaFRxmu1E3IRfeCe/QSQmg==}
     engines: {node: '>=20.18.0'}
@@ -377,6 +405,21 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  '@solana/kit-plugin-instruction-plan@0.19.0':
+    resolution: {integrity: sha512-62gh9R3jTMuU3UOPNuerQF9QRGM3TTRlVjD4Ukt78Vt3pdKpjx7g311DEDoP3SkKLw1q9UNc0KSKSbIsShFLwg==}
+    peerDependencies:
+      '@solana/kit': ^8.2.0
+
+  '@solana/kit-plugin-rpc@0.19.0':
+    resolution: {integrity: sha512-N3nOdC4AEKJ5q9dT6pb7HEPpPelSHNWFkEUeKuf7fy9/9ErLAhYSZD7U6gOyRcCYK5oNyK5YZoCY5IHeqbOuOQ==}
+    peerDependencies:
+      '@solana/kit': ^8.2.0
+
+  '@solana/kit-plugin-signer@0.19.0':
+    resolution: {integrity: sha512-yEwVODA9LfAYUDLDKHDPyHFsnTJFtmxDbZbVZJXXt0bJrejkuHoOopw5lH4yP+eTZEh1fo5XYNAHO6XopO33NQ==}
+    peerDependencies:
+      '@solana/kit': ^8.2.0
 
   '@solana/kit@8.4.0':
     resolution: {integrity: sha512-jbexijXuCqQ7MV5lFzPDEsVScreFENkhUOUVofniTkBsfi67cYGgEeGzJa7oskHGyXcWaEogW0VPVh4ep3cWnw==}
@@ -1064,6 +1107,15 @@ snapshots:
 
   '@noble/hashes@2.4.0': {}
 
+  '@solana-program/system@0.15.0(@solana/kit@8.4.0(typescript@7.0.2))':
+    dependencies:
+      '@solana/kit': 8.4.0(typescript@7.0.2)
+
+  '@solana-program/token@0.17.0(@solana/kit@8.4.0(typescript@7.0.2))':
+    dependencies:
+      '@solana-program/system': 0.15.0(@solana/kit@8.4.0(typescript@7.0.2))
+      '@solana/kit': 8.4.0(typescript@7.0.2)
+
   '@solana/accounts@8.4.0(typescript@7.0.2)':
     dependencies:
       '@solana/addresses': 8.4.0(typescript@7.0.2)
@@ -1191,6 +1243,19 @@ snapshots:
       typescript: 7.0.2
     transitivePeerDependencies:
       - fastestsmallesttextencoderdecoder
+
+  '@solana/kit-plugin-instruction-plan@0.19.0(@solana/kit@8.4.0(typescript@7.0.2))':
+    dependencies:
+      '@solana/kit': 8.4.0(typescript@7.0.2)
+
+  '@solana/kit-plugin-rpc@0.19.0(@solana/kit@8.4.0(typescript@7.0.2))':
+    dependencies:
+      '@solana/kit': 8.4.0(typescript@7.0.2)
+      '@solana/kit-plugin-instruction-plan': 0.19.0(@solana/kit@8.4.0(typescript@7.0.2))
+
+  '@solana/kit-plugin-signer@0.19.0(@solana/kit@8.4.0(typescript@7.0.2))':
+    dependencies:
+      '@solana/kit': 8.4.0(typescript@7.0.2)
 
   '@solana/kit@8.4.0(typescript@7.0.2)':
     dependencies:

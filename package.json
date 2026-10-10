@@ -6,9 +6,16 @@
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "tsc -p . && pnpm -r typecheck",
+    "seed:devnet": "tsx scripts/seed-devnet.ts"
   },
   "devDependencies": {
+    "@blockrouter/client": "workspace:*",
+    "@solana-program/system": "0.15.0",
+    "@solana-program/token": "0.17.0",
+    "@solana/kit": "8.4.0",
+    "@solana/kit-plugin-rpc": "0.19.0",
+    "@solana/kit-plugin-signer": "0.19.0",
     "@types/node": "26.6.4",
     "tsx": "4.23.15",
     "typescript": "7.0.2"
