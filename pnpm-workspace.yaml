@@ -1,3 +1,7 @@
 packages:
+  - client
   - relayer
   - cli
+
+allowBuilds:
+  esbuild: true
