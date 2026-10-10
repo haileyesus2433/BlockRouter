@@ -18,6 +18,7 @@ PROGRAM_KEYPAIR="${PROGRAM_KEYPAIR:-target/deploy/blockrouter-keypair.json}"
 SO="target/deploy/blockrouter.so"
 IDL="target/idl/blockrouter.json"
 ANCHOR_VERSION="1.2.0"
+SBPF_ARCH="${SBPF_ARCH:-v2}"
 
 fail() { echo "error: $*" >&2; exit 1; }
 
@@ -45,7 +46,8 @@ echo "program:   $declared_id"
 echo "authority: $authority"
 echo "cluster:   $URL"
 
-anchor build
+# Devnet supports SBPF v1 and v2 but not v3, which is anchor build's default.
+anchor build --arch "$SBPF_ARCH"
 [ -f "$SO" ] || fail "$SO missing after build"
 
 if solana program show "$declared_id" --url "$URL" >/dev/null 2>&1; then
