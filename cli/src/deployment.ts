@@ -9,6 +9,7 @@ export type Deployment = {
   programId: Address;
   usdcMint: Address;
   mockUsdtMint: Address | null;
+  relayer: Address | null;
   models: { id: number; alias: string; promptRate: number; completionRate: number }[];
 };
 
@@ -29,6 +30,7 @@ export function loadDeployment(cluster: Cluster): Deployment {
     programId: address(raw.programId),
     usdcMint: address(raw.usdcMint),
     mockUsdtMint: raw.mockUsdtMint ? address(raw.mockUsdtMint) : null,
+    relayer: raw.relayer ? address(raw.relayer) : null,
     models: raw.models,
   };
 }
