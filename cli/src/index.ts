@@ -1,6 +1,8 @@
 import { Command, Option } from "commander";
 
+import { registerVaultCommands } from "./commands/vault";
 import { createContext, type GlobalOptions } from "./context";
+import { describeError } from "./errors";
 import { formatSol } from "./format";
 
 const program = new Command()
@@ -31,7 +33,9 @@ program
     console.log(`program: ${deployment.programId}`);
   });
 
+registerVaultCommands(program);
+
 program.parseAsync().catch((error: unknown) => {
-  console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`error: ${describeError(error)}`);
   process.exit(1);
 });
