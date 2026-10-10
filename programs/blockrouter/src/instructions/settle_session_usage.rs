@@ -1,6 +1,5 @@
-//! Vault-only settlement of relayer-reported token counts; inference usage is not verified.
-//! Rates are evaluated at settlement time in mint base units. Deployments must
-//! define their approved payment mint and pricing denomination policy separately.
+//! Vault-only settlement of relayer-reported token counts; usage is not verified on-chain.
+//! Rates are in mint base units and read at settlement time.
 
 use anchor_lang::prelude::*;
 use anchor_spl::{
@@ -154,6 +153,9 @@ pub fn handle_settle_session_usage(
         )?;
     }
     emit!(UsageSettled {
+        session: ctx.accounts.session.key(),
+        vault: ctx.accounts.vault.key(),
+        relayer: ctx.accounts.relayer.key(),
         charge,
         prompt_tokens,
         completion_tokens,
@@ -165,6 +167,9 @@ pub fn handle_settle_session_usage(
 
 #[event]
 pub struct UsageSettled {
+    pub session: Pubkey,
+    pub vault: Pubkey,
+    pub relayer: Pubkey,
     pub charge: u64,
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
