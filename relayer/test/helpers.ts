@@ -11,12 +11,13 @@ import {
 
 import { randomBytes } from "node:crypto";
 
-import { walletAuthMessage } from "../src/auth";
+import { generateKey, hashKey, walletAuthMessage } from "../src/auth";
 
 import type { Chain, ModelState, SessionState, SettleInput } from "../src/chain/types";
 import type { Config } from "../src/config";
 import type { Deps } from "../src/app";
 import type { Provider } from "../src/providers/types";
+import { Ledger } from "../src/ledger";
 import { Store } from "../src/store";
 
 export function testConfig(overrides: Partial<Config> = {}): Config {
@@ -107,11 +108,15 @@ export function testProvider(): Provider {
 export const NOW_SECS = 1_800_000_000;
 
 export function testDeps(overrides: Partial<Deps> = {}): Deps {
+  const config = overrides.config ?? testConfig();
+  const chain = overrides.chain ?? fakeChain();
+  const store = overrides.store ?? new Store(":memory:");
   return {
-    config: testConfig(),
-    chain: fakeChain(),
+    config,
+    chain,
     provider: testProvider(),
-    store: new Store(":memory:"),
+    store,
+    ledger: new Ledger(store, chain, config.models),
     nowSecs: () => NOW_SECS,
     ...overrides,
   };
@@ -162,4 +167,19 @@ export function openSession(chain: FakeChain, owner: Address, overrides: Partial
   };
   chain.sessions.set(session.address, session);
   return session;
+}
+
+/** Inserts a key straight into the store and returns its plaintext. */
+export function issueKey(deps: Deps, session: SessionState): string {
+  const { id, key } = generateKey();
+  deps.store.insertKey({
+    id,
+    name: "test",
+    hash: hashKey(key),
+    sessionPubkey: session.address,
+    ownerPubkey: session.beneficiary,
+    createdAt: NOW_SECS,
+    revokedAt: null,
+  });
+  return key;
 }

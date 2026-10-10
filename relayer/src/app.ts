@@ -3,7 +3,9 @@ import { Hono } from "hono";
 import type { Chain } from "./chain/types";
 import type { Config } from "./config";
 import { ApiError, errorResponse } from "./errors";
+import type { Ledger } from "./ledger";
 import type { Provider } from "./providers/types";
+import { infoRoutes } from "./routes/info";
 import { keyRoutes } from "./routes/keys";
 import type { Store } from "./store";
 
@@ -12,6 +14,7 @@ export type Deps = {
   chain: Chain;
   provider: Provider;
   store: Store;
+  ledger: Ledger;
   /** Wall clock in unix seconds, injectable for tests. */
   nowSecs: () => number;
 };
@@ -29,6 +32,7 @@ export function createApp(deps: Deps) {
     c.json({ status: "ok", cluster: deps.config.cluster, provider: deps.provider.id }),
   );
   app.route("/v1/keys", keyRoutes(deps));
+  app.route("/v1", infoRoutes(deps));
 
   return app;
 }
