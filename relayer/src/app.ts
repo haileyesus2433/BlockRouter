@@ -5,6 +5,7 @@ import type { Config } from "./config";
 import { ApiError, errorResponse } from "./errors";
 import type { Ledger } from "./ledger";
 import type { Provider } from "./providers/types";
+import { chatRoutes } from "./routes/chat";
 import { infoRoutes } from "./routes/info";
 import { keyRoutes } from "./routes/keys";
 import type { Store } from "./store";
@@ -33,6 +34,7 @@ export function createApp(deps: Deps) {
   );
   app.route("/v1/keys", keyRoutes(deps));
   app.route("/v1", infoRoutes(deps));
+  app.route("/v1", chatRoutes(deps));
 
   return app;
 }

@@ -10,7 +10,7 @@ test("health reports cluster and provider", async () => {
   const app = createApp(testDeps());
   const response = await app.request("/health");
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ok", cluster: "localnet", provider: "test" });
+  assert.deepEqual(await response.json(), { status: "ok", cluster: "localnet", provider: "mock" });
 });
 
 test("charge mirrors the on-chain math and rounds down", () => {

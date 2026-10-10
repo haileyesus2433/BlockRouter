@@ -18,6 +18,7 @@ import type { Config } from "../src/config";
 import type { Deps } from "../src/app";
 import type { Provider } from "../src/providers/types";
 import { Ledger } from "../src/ledger";
+import { MockProvider } from "../src/providers/mock";
 import { Store } from "../src/store";
 
 export function testConfig(overrides: Partial<Config> = {}): Config {
@@ -114,7 +115,7 @@ export function testDeps(overrides: Partial<Deps> = {}): Deps {
   return {
     config,
     chain,
-    provider: testProvider(),
+    provider: new MockProvider(),
     store,
     ledger: new Ledger(store, chain, config.models),
     nowSecs: () => NOW_SECS,
