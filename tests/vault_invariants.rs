@@ -24,6 +24,7 @@ fn seed_config(fixture: &mut Fixture, paused: bool) -> Pubkey {
         bump,
     };
     seed_account(&mut fixture.svm, config_key, &config);
+    crate::common::seed_model(&mut fixture.svm, 42);
     config_key
 }
 
@@ -46,6 +47,7 @@ fn open_session(fixture: &mut Fixture, config_key: Pubkey, reserved_amount: u64)
             session,
             config: config_key,
             system_program: anchor_lang::solana_program::system_program::ID,
+            model: crate::common::model_pda(42),
         }
         .to_account_metas(None),
         data: blockrouter::instruction::OpenSession {

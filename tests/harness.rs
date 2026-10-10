@@ -50,10 +50,11 @@ fn warp_advances_the_clock() {
 fn warp_is_visible_to_the_program() {
     let mut env = setup();
     init_config(&mut env);
+    crate::common::seed_model(&mut env.svm, 42);
     funded_vault(&mut env, Actor::Alice, 1_000);
     warp(&mut env, 500);
 
-    let session = open_session(&mut env, Actor::Alice, 100, 120);
+    let session = open_session(&mut env, Actor::Alice, 100, 120, 42);
     let session = read::<Session>(&env.svm, session);
     assert_eq!(session.expires_at, NOW + 500 + 120);
 }
@@ -94,14 +95,16 @@ fn funded_vault_works_with_token_2022() {
 fn open_session_reserves_cap_for_relayer() {
     let mut env = setup();
     init_config(&mut env);
+    crate::common::seed_model(&mut env.svm, 42);
     let vault = funded_vault(&mut env, Actor::Alice, 1_000);
-    let first = open_session(&mut env, Actor::Alice, 300, 120);
-    let second = open_session(&mut env, Actor::Alice, 200, 120);
+    let first = open_session(&mut env, Actor::Alice, 300, 120, 42);
+    let second = open_session(&mut env, Actor::Alice, 200, 120, 42);
     assert_ne!(first, second);
 
     let session = read::<Session>(&env.svm, first);
     assert_eq!(session.relayer, env.key(Actor::Relayer));
     assert_eq!(session.reserved_amount, 300);
+    assert_eq!(session.model_id, 42);
     assert_eq!(read::<Vault>(&env.svm, vault).total_reserved, 500);
     assert_vault_invariant(&env, vault);
     assert_vault_matches_ata(&env, vault);

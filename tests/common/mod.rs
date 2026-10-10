@@ -5,7 +5,7 @@ use anchor_lang::{
 };
 use blockrouter::{
     constants::{CONFIG_SEED, MODEL_SEED, SESSION_SEED, VAULT_SEED},
-    state::{Allowance, SponsorVault, Vault},
+    state::{Allowance, Model, SponsorVault, Vault},
 };
 use litesvm::{
     types::{FailedTransactionMetadata, TransactionMetadata},
@@ -150,6 +150,27 @@ pub fn config_pda() -> Pubkey {
 
 pub fn model_pda(model_id: u16) -> Pubkey {
     Pubkey::find_program_address(&[MODEL_SEED, &model_id.to_le_bytes()], &blockrouter::id()).0
+}
+
+/// Seeds a valid, active Model fixture; opening still runs the real instruction.
+pub fn seed_model(svm: &mut LiteSVM, model_id: u16) -> Pubkey {
+    let (key, bump) =
+        Pubkey::find_program_address(&[MODEL_SEED, &model_id.to_le_bytes()], &blockrouter::id());
+    seed_account(
+        svm,
+        key,
+        &Model {
+            model_id,
+            prompt_rate: 1,
+            completion_rate: 2,
+            pending_prompt_rate: 0,
+            pending_completion_rate: 0,
+            effective_at: 0,
+            is_active: true,
+            bump,
+        },
+    );
+    key
 }
 
 pub fn vault_pda(owner: &Address, mint: &Address) -> Pubkey {
@@ -375,7 +396,7 @@ pub fn funded_vault(env: &mut TestEnv, who: Actor, amount: u64) -> Pubkey {
 
 /// Opens the next session on `who`'s vault, bound to the relayer actor.
 /// Requires init_config and funded_vault first.
-pub fn open_session(env: &mut TestEnv, who: Actor, cap: u64, secs: i64) -> Pubkey {
+pub fn open_session(env: &mut TestEnv, who: Actor, cap: u64, secs: i64, model_id: u16) -> Pubkey {
     let vault = vault_pda(&env.keypair(who).pubkey(), &env.mint);
     let session_id = read::<Vault>(&env.svm, vault).session_counter;
     let session = session_pda(&vault, session_id);
@@ -387,6 +408,7 @@ pub fn open_session(env: &mut TestEnv, who: Actor, cap: u64, secs: i64) -> Pubke
             session,
             config: config_pda(),
             system_program: anchor_lang::solana_program::system_program::ID,
+            model: model_pda(model_id),
         }
         .to_account_metas(None),
         data: blockrouter::instruction::OpenSession {

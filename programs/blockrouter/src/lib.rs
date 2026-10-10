@@ -33,6 +33,18 @@ pub mod blockrouter {
         instructions::reclaim_expired_session::handle_reclaim_expired_session(ctx)
     }
 
+    pub fn settle_session_usage(
+        ctx: Context<SettleSessionUsage>,
+        prompt_tokens: u64,
+        completion_tokens: u64,
+    ) -> Result<()> {
+        instructions::settle_session_usage::handle_settle_session_usage(
+            ctx,
+            prompt_tokens,
+            completion_tokens,
+        )
+    }
+
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         instructions::deposit::handle_deposit(ctx, amount)
     }
