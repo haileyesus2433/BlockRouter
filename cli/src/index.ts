@@ -1,5 +1,6 @@
 import { Command, Option } from "commander";
 
+import { registerSessionCommands } from "./commands/session";
 import { registerVaultCommands } from "./commands/vault";
 import { createContext, type GlobalOptions } from "./context";
 import { describeError } from "./errors";
@@ -34,6 +35,7 @@ program
   });
 
 registerVaultCommands(program);
+registerSessionCommands(program);
 
 program.parseAsync().catch((error: unknown) => {
   console.error(`error: ${describeError(error)}`);
