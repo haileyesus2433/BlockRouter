@@ -2,5 +2,21 @@
   "name": "@blockrouter/cli",
   "version": "0.1.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "bin": {
+    "br": "./bin/br.js"
+  },
+  "scripts": {
+    "br": "node bin/br.js",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@blockrouter/client": "workspace:*",
+    "@solana-program/token": "0.17.0",
+    "@solana/kit": "8.4.0",
+    "@solana/kit-plugin-rpc": "0.19.0",
+    "@solana/kit-plugin-signer": "0.19.0",
+    "commander": "15.0.0",
+    "tsx": "4.23.15"
+  }
 }
