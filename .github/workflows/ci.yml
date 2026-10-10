@@ -51,9 +51,9 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
 
-      # The program keypair is not in git, so skip the declare_id check.
+      # Keypair is not in git, so skip the declare_id check. v2 matches what devnet runs.
       - name: Build
-        run: anchor build --ignore-keys
+        run: anchor build --ignore-keys --arch v2
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
