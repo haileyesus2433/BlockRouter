@@ -1,59 +1,37 @@
-#!/usr/bin/env node
-import { readFile } from "node:fs/promises";
-import { Command } from "commander";
-import { loadWallet } from "./wallet.js";
-import { loadProjectConfig, selectCluster } from "./config.js";
-import { createProgramClient } from "./client.js";
+import { Command, Option } from "commander";
 
-const { version } = JSON.parse(
-  await readFile(new URL("../../package.json", import.meta.url), "utf8"),
-);
-const cli = new Command()
+import { createContext, type GlobalOptions } from "./context";
+import { formatSol } from "./format";
+
+const program = new Command()
   .name("br")
-  .description(
-    "BlockRouter CLI: load a wallet and initialize an offline program client.",
+  .description("BlockRouter: self-custodial stablecoin payments for AI inference")
+  .version("0.1.0")
+  .addOption(
+    new Option("-c, --cluster <cluster>", "cluster to use")
+      .choices(["devnet", "localnet"])
+      .default("devnet"),
   )
-  .version(version)
-  .option(
-    "--wallet <path>",
-    "Solana keypair JSON (default: Anchor.toml provider wallet)",
-  )
-  .option(
-    "--cluster <name>",
-    "localnet, devnet or mainnet-beta (default: Anchor.toml provider cluster)",
-  )
-  .option("--rpc-url <url>", "Override the cluster's HTTP(S) RPC endpoint")
-  .option(
-    "--idl <path>",
-    "Generated Anchor IDL (default: target/idl/blockrouter.json)",
-  )
-  .addHelpText(
-    "after",
-    "\nInitialization sends no transactions or RPC requests. Vault and Session commands are not yet available.",
-  )
-  .action(async (options) => {
-    const config = await loadProjectConfig();
-    const { cluster, endpoint } = selectCluster(
-      options.cluster ?? config.cluster,
-      options.rpcUrl,
+  .option("-u, --url <url>", "custom RPC URL for the cluster")
+  .option("-k, --keypair <path>", "wallet keypair (default: $BR_KEYPAIR or ~/.config/solana/id.json)")
+  .showHelpAfterError();
+
+program
+  .command("wallet")
+  .description("show the loaded wallet, its SOL balance, and the cluster")
+  .action(async () => {
+    const { client, deployment, keypairPath, rpcUrl } = await createContext(
+      program.opts<GlobalOptions>(),
     );
-    const wallet = await loadWallet(options.wallet ?? config.wallet);
-    const client = await createProgramClient({
-      endpoint,
-      wallet,
-      programAddress: config.programAddress,
-      idlPath: options.idl,
-    });
-    console.log(
-      `Wallet: ${wallet.address}\nCluster: ${cluster}\nProgram: ${client.programAddress}\nClient initialized offline; deployment has not been verified.`,
-    );
+    const { value } = await client.rpc.getBalance(client.payer.address).send();
+    console.log(`wallet:  ${client.payer.address}`);
+    console.log(`keypair: ${keypairPath}`);
+    console.log(`balance: ${formatSol(value)} SOL`);
+    console.log(`cluster: ${deployment.cluster} (${rpcUrl})`);
+    console.log(`program: ${deployment.programId}`);
   });
 
-try {
-  await cli.parseAsync();
-} catch (error) {
-  console.error(
-    `br: ${error instanceof Error ? error.message : "Initialization failed."}`,
-  );
-  process.exitCode = 1;
-}
+program.parseAsync().catch((error: unknown) => {
+  console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+});

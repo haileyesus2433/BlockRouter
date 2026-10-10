@@ -6,8 +6,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "tsc -p . && pnpm -r typecheck",
-    "seed:devnet": "tsx scripts/seed-devnet.ts"
+    "br": "node cli/bin/br.js",
+    "seed:devnet": "tsx scripts/seed-devnet.ts",
+    "typecheck": "tsc -p . && pnpm -r typecheck"
   },
   "devDependencies": {
     "@blockrouter/client": "workspace:*",
