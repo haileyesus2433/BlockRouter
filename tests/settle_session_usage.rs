@@ -241,6 +241,9 @@ impl Fixture {
         let events = common::events::<UsageSettled>(&metadata);
         assert_eq!(events.len(), 1);
         let event = &events[0];
+        assert_eq!(event.session, self.session);
+        assert_eq!(event.vault, self.vault);
+        assert_eq!(event.relayer, self.env.key(Actor::Relayer));
         assert_eq!(event.charge, expected);
         assert_eq!(event.prompt_tokens, prompt);
         assert_eq!(event.completion_tokens, completion);
