@@ -29,6 +29,8 @@ export type SettleInput = {
 };
 
 export interface Chain {
+  /** This relayer's signing address; sessions must name it to be settled. */
+  relayer: Address;
   getSession(address: Address): Promise<SessionState | null>;
   getModel(modelId: number): Promise<ModelState | null>;
   /** Submits raw token counts; the program computes the charge. Returns the signature. */

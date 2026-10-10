@@ -1,8 +1,23 @@
-import type { Address } from "@solana/kit";
+import {
+  type Address,
+  address,
+  generateKeyPair,
+  getAddressDecoder,
+  getAddressFromPublicKey,
+  getBase58Decoder,
+  getUtf8Encoder,
+  signBytes,
+} from "@solana/kit";
+
+import { randomBytes } from "node:crypto";
+
+import { walletAuthMessage } from "../src/auth";
 
 import type { Chain, ModelState, SessionState, SettleInput } from "../src/chain/types";
 import type { Config } from "../src/config";
+import type { Deps } from "../src/app";
 import type { Provider } from "../src/providers/types";
+import { Store } from "../src/store";
 
 export function testConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -54,6 +69,7 @@ export function fakeChain(): FakeChain {
   ]);
   const settlements: SettleInput[] = [];
   const chain: FakeChain = {
+    relayer: address("8vunfgvssmtyqGFLxArjSAts9ZMZMdhCPP1bnzqUdrEC"),
     sessions,
     models,
     settlements,
@@ -86,4 +102,64 @@ export function testProvider(): Provider {
     },
     countTokens: () => 0,
   };
+}
+
+export const NOW_SECS = 1_800_000_000;
+
+export function testDeps(overrides: Partial<Deps> = {}): Deps {
+  return {
+    config: testConfig(),
+    chain: fakeChain(),
+    provider: testProvider(),
+    store: new Store(":memory:"),
+    nowSecs: () => NOW_SECS,
+    ...overrides,
+  };
+}
+
+export type TestWallet = { address: Address; privateKey: CryptoKey };
+
+export async function testWallet(): Promise<TestWallet> {
+  const pair = await generateKeyPair();
+  return { address: await getAddressFromPublicKey(pair.publicKey), privateKey: pair.privateKey };
+}
+
+export async function signedHeaders(
+  wallet: TestWallet,
+  method: string,
+  path: string,
+  timestamp = NOW_SECS,
+): Promise<Record<string, string>> {
+  const message = getUtf8Encoder().encode(walletAuthMessage(wallet.address, method, path, timestamp));
+  const signature = await signBytes(wallet.privateKey, message);
+  return {
+    "X-BlockRouter-Address": wallet.address,
+    "X-BlockRouter-Timestamp": String(timestamp),
+    "X-BlockRouter-Signature": getBase58Decoder().decode(signature),
+    "Content-Type": "application/json",
+  };
+}
+
+let sessionCounter = 0;
+
+export function randomAddress(): Address {
+  return getAddressDecoder().decode(randomBytes(32));
+}
+
+export function openSession(chain: FakeChain, owner: Address, overrides: Partial<SessionState> = {}): SessionState {
+  sessionCounter += 1;
+  const session: SessionState = {
+    address: randomAddress(),
+    vault: randomAddress(),
+    payerKind: "vault",
+    beneficiary: owner,
+    relayer: chain.relayer,
+    reservedAmount: 5_000_000n,
+    sessionId: BigInt(sessionCounter),
+    expiresAt: chain.clock.now + 86_400n,
+    modelId: 1,
+    ...overrides,
+  };
+  chain.sessions.set(session.address, session);
+  return session;
 }

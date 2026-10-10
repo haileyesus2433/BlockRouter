@@ -85,5 +85,5 @@ export async function createKitChain(options: { rpcUrl: string; relayerKeypair: 
     return time === null ? BigInt(Math.floor(Date.now() / 1000)) : BigInt(time);
   }
 
-  return { getSession, getModel, settle, now };
+  return { relayer: client.payer.address, getSession, getModel, settle, now };
 }

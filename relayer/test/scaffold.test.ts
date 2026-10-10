@@ -4,10 +4,10 @@ import { test } from "node:test";
 import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
 import { charge, effectiveRates } from "../src/pricing";
-import { fakeChain, model, testConfig, testProvider } from "./helpers";
+import { fakeChain, model, testDeps } from "./helpers";
 
 test("health reports cluster and provider", async () => {
-  const app = createApp({ config: testConfig(), chain: fakeChain(), provider: testProvider() });
+  const app = createApp(testDeps());
   const response = await app.request("/health");
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: "ok", cluster: "localnet", provider: "test" });
