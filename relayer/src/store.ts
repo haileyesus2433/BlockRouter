@@ -150,6 +150,13 @@ export class Store {
       .run(now, signature, session);
   }
 
+  /** Usage that can no longer be billed, e.g. the session expired or was reclaimed first. */
+  markUnbillable(session: string, reason: string, now: number): void {
+    this.db
+      .prepare("UPDATE usage SET settled_at = ?, settle_signature = NULL, last_error = ? WHERE session_pubkey = ?")
+      .run(now, reason, session);
+  }
+
   recordSettleError(session: string, error: string): void {
     this.db.prepare("UPDATE usage SET last_error = ? WHERE session_pubkey = ?").run(error, session);
   }

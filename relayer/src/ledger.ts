@@ -33,6 +33,7 @@ export function worstCaseRates(model: ModelState): Rates {
 
 export class Ledger {
   private readonly holds = new Map<string, bigint>();
+  private readonly settling = new Set<string>();
 
   constructor(
     private readonly store: Store,
@@ -47,7 +48,7 @@ export class Ledger {
   /** Resolves the live session bound to a key, or throws the error the client should see. */
   async resolve(key: ApiKeyRecord): Promise<ActiveSession> {
     const usage = this.store.getUsage(key.sessionPubkey);
-    if (usage && usage.settledAt !== null) throw sessionSettled();
+    if (this.settling.has(key.sessionPubkey) || (usage && usage.settledAt !== null)) throw sessionSettled();
 
     const session = await this.chain.getSession(key.sessionPubkey as SessionState["address"]);
     if (!session) throw noActiveSession();
@@ -72,6 +73,15 @@ export class Ledger {
   remaining(active: ActiveSession): bigint {
     const left = active.session.reservedAmount - this.pendingCharge(active.usage, active.model) - this.held(active.session.address);
     return left > 0n ? left : 0n;
+  }
+
+  /** Stops new requests on a session so settlement sees its final usage. */
+  beginSettle(session: string): void {
+    this.settling.add(session);
+  }
+
+  endSettle(session: string): void {
+    this.settling.delete(session);
   }
 
   hold(session: string, amount: bigint): void {

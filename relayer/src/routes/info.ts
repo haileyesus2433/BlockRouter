@@ -53,5 +53,13 @@ export function infoRoutes(deps: Deps) {
     });
   });
 
+  // Asks the worker to settle now and release the unused reservation. The key stops working.
+  routes.post("/session/close", async (c) => {
+    const key = verifyApiKey(deps.store, c.req.header("Authorization"));
+    const { session } = await deps.ledger.resolve(key);
+    deps.store.requestClose(session.address, deps.nowSecs());
+    return c.json({ session: session.address, closing: true, settle_within_secs: deps.config.workerTickSecs }, 202);
+  });
+
   return routes;
 }
