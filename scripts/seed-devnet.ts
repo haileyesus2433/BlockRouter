@@ -15,7 +15,12 @@ import {
 import { solanaDevnetRpc } from "@solana/kit-plugin-rpc";
 import { signerFromFile } from "@solana/kit-plugin-signer";
 import { getTransferSolInstruction } from "@solana-program/system";
-import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS, tokenProgram } from "@solana-program/token";
+import {
+  findAssociatedTokenPda,
+  getCreateAssociatedTokenIdempotentInstructionAsync,
+  TOKEN_PROGRAM_ADDRESS,
+  tokenProgram,
+} from "@solana-program/token";
 import {
   BLOCKROUTER_PROGRAM_ADDRESS,
   blockrouterProgram,
@@ -92,7 +97,8 @@ async function main() {
 
   // 1. Config
   const [config] = await findConfigPda();
-  if ((await fetchMaybeConfig(rpc, config)).exists) {
+  const existingConfig = await fetchMaybeConfig(rpc, config);
+  if (existingConfig.exists) {
     console.log(`config:   exists ${config}`);
   } else {
     const [programData] = await getProgramDerivedAddress({
@@ -151,7 +157,20 @@ async function main() {
     console.log(`usdt:     created ${mockUsdt} (saved to ${DEPLOYMENT})`);
   }
 
-  // 4. Demo vault funded with mock USDT
+  // 4. Settlement pays into the provider's token account, so it must exist for each mint.
+  const provider = existingConfig.exists
+    ? existingConfig.data.provider
+    : address(process.env.PROVIDER ?? admin.payer.address);
+  await admin.sendTransaction([
+    await getCreateAssociatedTokenIdempotentInstructionAsync({
+      payer: admin.payer,
+      owner: provider,
+      mint: mockUsdt,
+    }),
+  ]);
+  console.log(`provider: token account ready for ${provider}`);
+
+  // 5. Demo vault funded with mock USDT
   const demoBalance = (await rpc.getBalance(demo.payer.address).send()).value;
   if (demoBalance < DEMO_MIN_LAMPORTS) {
     await admin.sendTransaction([
