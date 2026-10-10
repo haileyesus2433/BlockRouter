@@ -4,5 +4,13 @@
   "packageManager": "pnpm@11.26.0",
   "engines": {
     "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
   }
 }
