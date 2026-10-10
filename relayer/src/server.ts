@@ -1,32 +1,15 @@
 import { serve } from "@hono/node-server";
-import { createApp } from "./app.js";
-import { loadConfig, ConfigurationError } from "./config.js";
-import { createProgramClient } from "./client.js";
 
-async function main() {
-  const config = await loadConfig();
-  await createProgramClient(config);
-  const app = createApp();
-  const server = serve({
-    fetch: app.fetch,
-    hostname: config.host,
-    port: config.port,
-  });
-  server.on("listening", () => console.log("blockrouter-relayer listening"));
-  server.on("error", () => {
-    console.error("Relayer HTTP server failed to listen. Check HOST and PORT.");
-    process.exitCode = 1;
-  });
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.once(signal, () => server.close());
-  }
-}
+import { createApp } from "./app";
+import { createKitChain } from "./chain/kit";
+import { loadConfig } from "./config";
+import { MockProvider } from "./providers/mock";
 
-void main().catch((error: unknown) => {
-  console.error(
-    error instanceof ConfigurationError
-      ? error.message
-      : "Relayer startup failed.",
-  );
-  process.exitCode = 1;
+const config = loadConfig();
+const chain = await createKitChain({ rpcUrl: config.rpcUrl, relayerKeypair: config.relayerKeypair });
+const provider = new MockProvider();
+const app = createApp({ config, chain, provider });
+
+serve({ fetch: app.fetch, port: config.port }, ({ port }) => {
+  console.log(`relayer listening on :${port} (${config.cluster}, provider ${provider.id})`);
 });
