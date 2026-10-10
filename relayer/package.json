@@ -3,26 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "dependencies": {
-    "@anchor-lang/core": "1.2.1",
-    "@hono/node-server": "2.1.4",
-    "@solana/kit": "8.4.0",
-    "hono": "4.13.13",
-    "toml": "5.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^24.19.1",
-    "prettier": "^3.9.9",
-    "typescript": "^5.9.3"
-  },
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/src/server.js",
-    "dev": "pnpm build && node --watch dist/src/server.js",
-    "watch": "tsc --watch",
-    "typecheck": "tsc --noEmit",
-    "test": "pnpm build && node --test dist/tests/*.test.js",
-    "format": "prettier --write src tests package.json tsconfig.json README.md",
-    "format:check": "prettier --check src tests package.json tsconfig.json README.md"
+    "start": "tsx src/server.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@blockrouter/client": "workspace:*",
+    "@hono/node-server": "2.1.4",
+    "@solana-program/token": "0.17.0",
+    "@solana/kit": "8.4.0",
+    "@solana/kit-plugin-rpc": "0.19.0",
+    "@solana/kit-plugin-signer": "0.19.0",
+    "hono": "4.13.13",
+    "tsx": "4.23.15"
   }
 }
