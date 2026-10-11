@@ -236,7 +236,7 @@ export function chatRoutes(deps: Deps) {
       } catch (error) {
         settle(null);
         logUpstreamFailure(active, choice, error);
-        throw upstreamError();
+        throw upstreamError(error instanceof UpstreamStatusError ? error.status : undefined);
       }
       if (!usage) {
         settle(null);
@@ -313,7 +313,7 @@ export function chatRoutes(deps: Deps) {
         if (stream.aborted) return;
         settle(null);
         logUpstreamFailure(active, choice, error);
-        const failure = upstreamError();
+        const failure = upstreamError(error instanceof UpstreamStatusError ? error.status : undefined);
         await stream.writeSSE({ data: JSON.stringify({ error: { message: failure.message, type: failure.type, code: failure.code } }) });
         await stream.writeSSE({ data: "[DONE]" });
         return;

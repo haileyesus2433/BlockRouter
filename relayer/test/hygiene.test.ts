@@ -134,6 +134,7 @@ test("upstream failures are logged by status code, never by body", async () => {
       body: JSON.stringify({ model: "deepseek-v3", messages: [{ role: "user", content: SECRET }] }),
     });
     assert.equal(response.status, 502);
+    assert.match(((await response.json()) as any).error.message, /\(402\).*br key update/);
   });
   const entry = JSON.parse(logs.split("\n").find((line) => line.includes("upstream_error"))!);
   assert.equal(entry.status, 402);
