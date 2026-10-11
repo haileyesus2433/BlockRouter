@@ -50,6 +50,7 @@ export function createApp(deps: Deps) {
     c.json({
       status: "ok",
       cluster: deps.config.cluster,
+      relayer: deps.chain.relayer,
       provider: deps.providers.size > 0 ? "upstream" : deps.provider.id,
       providers: [...deps.providers.keys()],
     }),
