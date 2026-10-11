@@ -82,4 +82,6 @@ pub enum BlockRouterError {
     UnsupportedMint,
     #[msg("Model does not match the session binding")]
     SessionModelMismatch,
+    #[msg("A model appears more than once")]
+    DuplicateModel,
 }

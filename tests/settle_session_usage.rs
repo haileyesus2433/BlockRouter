@@ -6,7 +6,7 @@ use anchor_lang::{
 };
 use blockrouter::{
     errors::BlockRouterError,
-    instructions::UsageSettled,
+    instructions::{ModelUsage, UsageSettled},
     state::{Config, Model, PayerKind, Session, Vault},
 };
 use litesvm::types::TransactionMetadata;
@@ -50,24 +50,37 @@ impl Fixture {
         }
     }
     fn ix(&self, prompt_tokens: u64, completion_tokens: u64) -> Instruction {
+        self.ix_lines(&[(MODEL_ID, prompt_tokens, completion_tokens)])
+    }
+    /// One usage line per (model_id, prompt, completion), with its Model PDA appended.
+    fn ix_lines(&self, lines: &[(u16, u64, u64)]) -> Instruction {
+        let ids: Vec<u16> = lines.iter().map(|(id, _, _)| *id).collect();
         Instruction {
             program_id: address(blockrouter::id()),
-            accounts: blockrouter::accounts::SettleSessionUsage {
-                relayer: self.env.key(Actor::Relayer),
-                vault: self.vault,
-                vault_ata: pubkey(self.env.vault_ata(self.vault)),
-                session: self.session,
-                model: common::model_pda(MODEL_ID),
-                config: common::config_pda(),
-                provider_ata: pubkey(self.env.ata(Actor::Bob)),
-                token_program: pubkey(self.env.token_program),
-                mint: pubkey(self.env.mint),
-                beneficiary: self.env.key(Actor::Alice),
-            }
-            .to_account_metas(None),
+            accounts: common::with_models(
+                blockrouter::accounts::SettleSessionUsage {
+                    relayer: self.env.key(Actor::Relayer),
+                    vault: self.vault,
+                    vault_ata: pubkey(self.env.vault_ata(self.vault)),
+                    session: self.session,
+                    config: common::config_pda(),
+                    provider_ata: pubkey(self.env.ata(Actor::Bob)),
+                    token_program: pubkey(self.env.token_program),
+                    mint: pubkey(self.env.mint),
+                    beneficiary: self.env.key(Actor::Alice),
+                }
+                .to_account_metas(None),
+                &ids,
+            ),
             data: blockrouter::instruction::SettleSessionUsage {
-                prompt_tokens,
-                completion_tokens,
+                usage: lines
+                    .iter()
+                    .map(|(model_id, prompt_tokens, completion_tokens)| ModelUsage {
+                        model_id: *model_id,
+                        prompt_tokens: *prompt_tokens,
+                        completion_tokens: *completion_tokens,
+                    })
+                    .collect(),
             }
             .data(),
         }
@@ -247,7 +260,14 @@ impl Fixture {
         assert_eq!(event.charge, expected);
         assert_eq!(event.prompt_tokens, prompt);
         assert_eq!(event.completion_tokens, completion);
-        assert_eq!(event.model_id, MODEL_ID);
+        assert_eq!(
+            event.usage,
+            vec![ModelUsage {
+                model_id: MODEL_ID,
+                prompt_tokens: prompt,
+                completion_tokens: completion,
+            }]
+        );
         assert_eq!(event.unused_released, session.reserved_amount - expected);
         metadata
     }
@@ -327,7 +347,7 @@ fn wrong_vault_association_is_rejected() {
     let mut ix = f.ix(0, 0);
     ix.accounts[1].pubkey = address(other);
     ix.accounts[2].pubkey = common::ata_address(&address(other), &mint, &f.env.token_program);
-    ix.accounts[8].pubkey = mint;
+    ix.accounts[7].pubkey = mint;
     f.error(ix, BlockRouterError::SessionVaultMismatch);
 }
 #[test]
@@ -353,9 +373,8 @@ fn equality_at_expiry_succeeds() {
 #[test]
 fn model_substitution_is_rejected() {
     let mut f = Fixture::new();
-    let model = common::seed_model(&mut f.env.svm, 43);
-    let mut ix = f.ix(0, 0);
-    ix.accounts[4].pubkey = address(model);
+    common::seed_model(&mut f.env.svm, 43);
+    let ix = f.ix_lines(&[(43, 1_000, 0)]);
     f.error(ix, BlockRouterError::SessionModelMismatch);
 }
 #[test]
@@ -383,7 +402,7 @@ fn attacker_provider_is_rejected() {
     assert_eq!(attacker_account.mint, f.env.mint);
     // A real positive charge would be paid here if destination authorization failed.
     let mut ix = f.ix(1_000_000, 0);
-    ix.accounts[6].pubkey = attacker_ata;
+    ix.accounts[5].pubkey = attacker_ata;
     f.error(ix, BlockRouterError::UnauthorizedProvider);
 }
 #[test]
@@ -400,7 +419,7 @@ fn wrong_provider_mint_is_rejected() {
         .send()
         .unwrap();
     let mut ix = f.ix(0, 0);
-    ix.accounts[6].pubkey = ata;
+    ix.accounts[5].pubkey = ata;
     f.error(ix, BlockRouterError::UnauthorizedProvider);
 }
 #[test]
@@ -410,7 +429,7 @@ fn noncanonical_provider_account_is_rejected() {
     let account = f.env.svm.get_account(&f.env.ata(Actor::Bob)).unwrap();
     f.env.svm.set_account(address(fake), account).unwrap();
     let mut ix = f.ix(0, 0);
-    ix.accounts[6].pubkey = address(fake);
+    ix.accounts[5].pubkey = address(fake);
     f.error(ix, BlockRouterError::UnauthorizedProvider);
 }
 #[test]
@@ -420,7 +439,7 @@ fn aliased_source_and_destination_are_rejected() {
     c.provider = f.vault;
     seed_account(&mut f.env.svm, common::config_pda(), &c);
     let mut ix = f.ix(0, 0);
-    ix.accounts[6].pubkey = f.env.vault_ata(f.vault);
+    ix.accounts[5].pubkey = f.env.vault_ata(f.vault);
     f.anchor_error(
         ix,
         anchor_lang::error::ErrorCode::ConstraintDuplicateMutableAccount,
@@ -461,8 +480,8 @@ fn wrong_model_pda_is_rejected() {
     let m = read::<Model>(&f.env.svm, common::model_pda(MODEL_ID));
     seed_account(&mut f.env.svm, fake, &m);
     let mut ix = f.ix(0, 0);
-    ix.accounts[4].pubkey = address(fake);
-    f.anchor_error(ix, anchor_lang::error::ErrorCode::ConstraintSeeds);
+    ix.accounts.last_mut().unwrap().pubkey = address(fake);
+    f.error(ix, BlockRouterError::ModelNotFound);
 }
 #[test]
 fn wrong_session_pda_is_rejected() {
@@ -478,7 +497,7 @@ fn wrong_session_pda_is_rejected() {
 fn wrong_rent_recipient_is_rejected() {
     let mut f = Fixture::new();
     let mut ix = f.ix(0, 0);
-    ix.accounts[9].pubkey = address(f.env.key(Actor::Attacker));
+    ix.accounts[8].pubkey = address(f.env.key(Actor::Attacker));
     f.error(ix, BlockRouterError::Unauthorized);
 }
 #[test]
@@ -487,7 +506,7 @@ fn beneficiary_must_be_vault_owner() {
     let bob = f.env.key(Actor::Bob);
     f.session(|s| s.beneficiary = bob);
     let mut ix = f.ix(0, 0);
-    ix.accounts[9].pubkey = address(bob);
+    ix.accounts[8].pubkey = address(bob);
     f.error(ix, BlockRouterError::Unauthorized);
 }
 #[test]
@@ -619,7 +638,7 @@ fn wrong_config_pda_is_rejected() {
     let config = read::<Config>(&f.env.svm, common::config_pda());
     seed_account(&mut f.env.svm, fake, &config);
     let mut ix = f.ix(0, 0);
-    ix.accounts[5].pubkey = address(fake);
+    ix.accounts[4].pubkey = address(fake);
     f.anchor_error(ix, anchor_lang::error::ErrorCode::ConstraintSeeds);
 }
 
@@ -645,8 +664,7 @@ fn expiry_check_precedes_model_binding_and_active_checks() {
     let mut m = read::<Model>(&f.env.svm, model);
     m.is_active = false;
     seed_account(&mut f.env.svm, model, &m);
-    let mut ix = f.ix(0, 0);
-    ix.accounts[4].pubkey = address(model);
+    let ix = f.ix_lines(&[(43, 0, 0)]);
     f.error(ix, BlockRouterError::SessionExpired);
 }
 
@@ -657,8 +675,7 @@ fn binding_check_precedes_active_check() {
     let mut m = read::<Model>(&f.env.svm, model);
     m.is_active = false;
     seed_account(&mut f.env.svm, model, &m);
-    let mut ix = f.ix(0, 0);
-    ix.accounts[4].pubkey = address(model);
+    let ix = f.ix_lines(&[(43, 0, 0)]);
     f.error(ix, BlockRouterError::SessionModelMismatch);
 }
 
@@ -666,7 +683,7 @@ fn binding_check_precedes_active_check() {
 fn charge_limit_check_precedes_provider_check() {
     let mut f = Fixture::new();
     let mut ix = f.ix(4_000_000, 0);
-    ix.accounts[6].pubkey = f.env.ata(Actor::Attacker);
+    ix.accounts[5].pubkey = f.env.ata(Actor::Attacker);
     f.error(ix, BlockRouterError::ChargeExceedsReservation);
 }
 
@@ -678,20 +695,23 @@ fn different_sessions_authorized_relayer_cannot_settle_this_session() {
     let other_relayer = f.env.key(Actor::Attacker);
     let open = Instruction {
         program_id: address(blockrouter::id()),
-        accounts: blockrouter::accounts::OpenSession {
-            user: f.env.key(Actor::Alice),
-            vault: f.vault,
-            session: other_session,
-            config: common::config_pda(),
-            system_program: anchor_lang::solana_program::system_program::ID,
-            model: common::model_pda(MODEL_ID),
-        }
-        .to_account_metas(None),
+        accounts: common::with_models(
+            blockrouter::accounts::OpenSession {
+                user: f.env.key(Actor::Alice),
+                vault: f.vault,
+                session: other_session,
+                config: common::config_pda(),
+                system_program: anchor_lang::solana_program::system_program::ID,
+            }
+            .to_account_metas(None),
+            &[MODEL_ID],
+        ),
         data: blockrouter::instruction::OpenSession {
             session_id: next_id,
             reserved_amount: 100,
             relayer: other_relayer,
             duration_secs: 3_600,
+            model_ids: vec![MODEL_ID],
         }
         .data(),
     };
@@ -712,4 +732,131 @@ fn different_sessions_authorized_relayer_cannot_settle_this_session() {
         InstructionError::Custom(u32::from(BlockRouterError::UnauthorizedRelayer)),
     );
     assert_eq!(f.env.svm.get_account(&address(other_session)), other_before);
+}
+
+const SECOND_MODEL: u16 = 43;
+
+/// Fixture whose session allows MODEL_ID (100/200) and SECOND_MODEL (1_000/3_000).
+fn multi_model() -> Fixture {
+    let mut f = Fixture::new();
+    common::seed_model(&mut f.env.svm, SECOND_MODEL);
+    let mut second = read::<Model>(&f.env.svm, common::model_pda(SECOND_MODEL));
+    second.prompt_rate = 1_000;
+    second.completion_rate = 3_000;
+    seed_account(&mut f.env.svm, common::model_pda(SECOND_MODEL), &second);
+    f.session = common::open_session_with_models(
+        &mut f.env,
+        Actor::Alice,
+        RESERVATION,
+        3_600,
+        &[MODEL_ID, SECOND_MODEL],
+    );
+    f
+}
+
+#[test]
+fn several_models_settle_in_one_transaction_each_at_its_own_rate() {
+    let mut f = multi_model();
+    let before = read::<Vault>(&f.env.svm, f.vault);
+    let provider_before = common::token_balance(&f.env.svm, &f.env.ata(Actor::Bob));
+    // 1_000_000 * 100 / 1e6 = 100, plus (10_000 * 1_000 + 20_000 * 3_000) / 1e6 = 70.
+    let ix = f.ix_lines(&[(MODEL_ID, 1_000_000, 0), (SECOND_MODEL, 10_000, 20_000)]);
+    let metadata = f.env.send(Actor::Relayer, ix).unwrap();
+
+    let after = read::<Vault>(&f.env.svm, f.vault);
+    assert_eq!(after.balance, before.balance - 170);
+    assert_eq!(after.total_reserved, before.total_reserved - RESERVATION);
+    assert_eq!(
+        common::token_balance(&f.env.svm, &f.env.ata(Actor::Bob)),
+        provider_before + 170
+    );
+    assert!(f.env.svm.get_account(&address(f.session)).is_none());
+    common::assert_vault_invariant(&f.env, f.vault);
+    common::assert_vault_matches_ata(&f.env, f.vault);
+
+    let events = common::events::<UsageSettled>(&metadata);
+    assert_eq!(events.len(), 1);
+    let event = &events[0];
+    assert_eq!(event.charge, 170);
+    assert_eq!(event.prompt_tokens, 1_010_000);
+    assert_eq!(event.completion_tokens, 20_000);
+    assert_eq!(event.unused_released, RESERVATION - 170);
+    assert_eq!(event.usage.len(), 2);
+    assert_eq!(event.usage[1].model_id, SECOND_MODEL);
+}
+
+#[test]
+fn lines_are_priced_and_rounded_down_individually() {
+    let mut f = multi_model();
+    let before = read::<Vault>(&f.env.svm, f.vault).balance;
+    // Each line is worth 0.5 base units and rounds down to 0 on its own.
+    let ix = f.ix_lines(&[(MODEL_ID, 5_000, 0), (SECOND_MODEL, 500, 0)]);
+    f.env.send(Actor::Relayer, ix).unwrap();
+    assert_eq!(read::<Vault>(&f.env.svm, f.vault).balance, before);
+}
+
+#[test]
+fn an_empty_usage_list_releases_the_whole_reservation() {
+    let mut f = multi_model();
+    let before = read::<Vault>(&f.env.svm, f.vault);
+    let ix = f.ix_lines(&[]);
+    f.env.send(Actor::Relayer, ix).unwrap();
+    let after = read::<Vault>(&f.env.svm, f.vault);
+    assert_eq!(after.balance, before.balance);
+    assert_eq!(after.total_reserved, before.total_reserved - RESERVATION);
+    assert!(f.env.svm.get_account(&address(f.session)).is_none());
+}
+
+#[test]
+fn the_combined_charge_is_capped_by_the_reservation() {
+    let mut f = multi_model();
+    // 200 + 150 = 350 > 300, although each line alone fits.
+    let ix = f.ix_lines(&[(MODEL_ID, 2_000_000, 0), (SECOND_MODEL, 0, 50_000)]);
+    f.error(ix, BlockRouterError::ChargeExceedsReservation);
+}
+
+#[test]
+fn duplicate_usage_lines_are_rejected() {
+    let mut f = multi_model();
+    let ix = f.ix_lines(&[(MODEL_ID, 1, 0), (MODEL_ID, 1, 0)]);
+    f.error(ix, BlockRouterError::DuplicateModel);
+}
+
+#[test]
+fn more_than_eight_usage_lines_are_rejected() {
+    let mut f = multi_model();
+    let lines: Vec<(u16, u64, u64)> = (1..=9).map(|id| (id, 0, 0)).collect();
+    let ix = f.ix_lines(&lines);
+    f.error(ix, BlockRouterError::TooManyModels);
+}
+
+#[test]
+fn a_line_for_a_model_outside_the_session_set_is_rejected() {
+    let mut f = multi_model();
+    common::seed_model(&mut f.env.svm, 44);
+    let ix = f.ix_lines(&[(MODEL_ID, 1, 0), (44, 1, 0)]);
+    f.error(ix, BlockRouterError::SessionModelMismatch);
+}
+
+#[test]
+fn an_inactive_model_in_the_set_is_rejected() {
+    let mut f = multi_model();
+    let mut second = read::<Model>(&f.env.svm, common::model_pda(SECOND_MODEL));
+    second.is_active = false;
+    seed_account(&mut f.env.svm, common::model_pda(SECOND_MODEL), &second);
+    let ix = f.ix_lines(&[(MODEL_ID, 1, 0), (SECOND_MODEL, 1, 0)]);
+    f.error(ix, BlockRouterError::ModelInactive);
+}
+
+#[test]
+fn model_accounts_must_match_their_lines() {
+    let mut f = multi_model();
+    let mut swapped = f.ix_lines(&[(MODEL_ID, 1, 0), (SECOND_MODEL, 1, 0)]);
+    let n = swapped.accounts.len();
+    swapped.accounts.swap(n - 1, n - 2);
+    f.error(swapped, BlockRouterError::ModelNotFound);
+
+    let mut missing = f.ix_lines(&[(MODEL_ID, 1, 0), (SECOND_MODEL, 1, 0)]);
+    missing.accounts.pop();
+    f.error(missing, BlockRouterError::ModelNotFound);
 }

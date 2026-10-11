@@ -41,20 +41,23 @@ fn open_session(fixture: &mut Fixture, config_key: Pubkey, reserved_amount: u64)
     let alice = fixture.alice.insecure_clone();
     let instruction = Instruction {
         program_id: address(blockrouter::id()),
-        accounts: blockrouter::accounts::OpenSession {
-            user: pubkey(alice.pubkey()),
-            vault: fixture.vault_key,
-            session,
-            config: config_key,
-            system_program: anchor_lang::solana_program::system_program::ID,
-            model: crate::common::model_pda(42),
-        }
-        .to_account_metas(None),
+        accounts: crate::common::with_models(
+            blockrouter::accounts::OpenSession {
+                user: pubkey(alice.pubkey()),
+                vault: fixture.vault_key,
+                session,
+                config: config_key,
+                system_program: anchor_lang::solana_program::system_program::ID,
+            }
+            .to_account_metas(None),
+            &[42],
+        ),
         data: blockrouter::instruction::OpenSession {
             session_id,
             reserved_amount,
             relayer: Pubkey::new_unique(),
             duration_secs: SESSION_SECS,
+            model_ids: vec![42],
         }
         .data(),
     };

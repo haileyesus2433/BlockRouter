@@ -1,6 +1,6 @@
 use anchor_lang::{InstructionData, ToAccountMetas};
 use blockrouter::{
-    instructions::UsageSettled,
+    instructions::{ModelUsage, UsageSettled},
     state::{Model, PayerKind, Session, Vault},
 };
 use litesvm_token::{get_spl_account, spl_token::state::Mint, Burn, MintTo};
@@ -126,7 +126,7 @@ fn full_vault_lifecycle_from_deposit_to_withdraw() {
     assert!(session.payer_kind == PayerKind::Vault);
     assert_eq!(session.beneficiary, env.key(Actor::Alice));
     assert_eq!(session.relayer, env.key(Actor::Relayer));
-    assert_eq!(session.model_id, model_id);
+    assert_eq!(session.allowed_models, vec![model_id]);
     assert_eq!(session.reserved_amount, cap);
     assert_eq!(session.session_id, 0);
     assert_eq!(
@@ -140,22 +140,27 @@ fn full_vault_lifecycle_from_deposit_to_withdraw() {
     // tokens at 2.00 per million produce exactly 1.20.
     let settle = Instruction {
         program_id: address(blockrouter::id()),
-        accounts: blockrouter::accounts::SettleSessionUsage {
-            relayer: env.key(Actor::Relayer),
-            vault: vault_key,
-            vault_ata: pubkey(vault_ata),
-            session: session_key,
-            model: model_key,
-            config,
-            provider_ata: pubkey(provider_ata),
-            token_program: pubkey(token_program),
-            mint: pubkey(mint_key),
-            beneficiary: env.key(Actor::Alice),
-        }
-        .to_account_metas(None),
+        accounts: common::with_models(
+            blockrouter::accounts::SettleSessionUsage {
+                relayer: env.key(Actor::Relayer),
+                vault: vault_key,
+                vault_ata: pubkey(vault_ata),
+                session: session_key,
+                config,
+                provider_ata: pubkey(provider_ata),
+                token_program: pubkey(token_program),
+                mint: pubkey(mint_key),
+                beneficiary: env.key(Actor::Alice),
+            }
+            .to_account_metas(None),
+            &[model_id],
+        ),
         data: blockrouter::instruction::SettleSessionUsage {
-            prompt_tokens: 1_000_000,
-            completion_tokens: 100_000,
+            usage: vec![ModelUsage {
+                model_id,
+                prompt_tokens: 1_000_000,
+                completion_tokens: 100_000,
+            }],
         }
         .data(),
     };
@@ -176,7 +181,10 @@ fn full_vault_lifecycle_from_deposit_to_withdraw() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].charge, charge);
     assert_eq!(events[0].unused_released, unused);
-    assert_eq!(events[0].model_id, model_id);
+    assert_eq!(events[0].usage.len(), 1);
+    assert_eq!(events[0].usage[0].model_id, model_id);
+    assert_eq!(events[0].prompt_tokens, 1_000_000);
+    assert_eq!(events[0].completion_tokens, 100_000);
 
     // 4. Withdraw all 8.80. Only the settled 1.20 leaves Alice's total funds.
     let withdraw = Instruction {

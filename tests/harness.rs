@@ -104,7 +104,7 @@ fn open_session_reserves_cap_for_relayer() {
     let session = read::<Session>(&env.svm, first);
     assert_eq!(session.relayer, env.key(Actor::Relayer));
     assert_eq!(session.reserved_amount, 300);
-    assert_eq!(session.model_id, 42);
+    assert_eq!(session.allowed_models, vec![42]);
     assert_eq!(read::<Vault>(&env.svm, vault).total_reserved, 500);
     assert_vault_invariant(&env, vault);
     assert_vault_matches_ata(&env, vault);
