@@ -47,3 +47,7 @@ export function explorerTx(signature: string): string {
   const query = cluster === "devnet" ? "cluster=devnet" : `cluster=custom&customUrl=${encodeURIComponent(rpcUrl)}`;
   return `https://explorer.solana.com/tx/${signature}?${query}`;
 }
+
+export function modelAlias(id: number): string {
+  return deployment?.models.find((model) => model.id === id)?.alias ?? `model-${id}`;
+}

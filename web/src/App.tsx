@@ -1,33 +1,60 @@
-import type { Address } from "@solana/kit";
 import { address } from "@solana/kit";
 import { useConnectedWallet, useDisconnect } from "@solana/kit-plugin-wallet/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { listSessions, loadMint, type MintInfo, readChainTime, readVault, type SessionView, type VaultView } from "./chain";
 import { Connect } from "./components/Connect";
-import { Keys } from "./components/Keys";
-import { Playground } from "./components/Playground";
-import { Sessions } from "./components/Sessions";
-import { NoticeBar, type Notice } from "./components/ui";
-import { Vault } from "./components/Vault";
+import { Icon, type IconName, Logo } from "./components/icons";
+import { Choice, Toasts, useToasts } from "./components/ui";
 import { cluster, deployment, relayerUrl } from "./config";
+import { type AppData, isActive, type View } from "./context";
 import { errorMessage, shortAddress, syncChainClock } from "./format";
-import { demoIdentity, forgetDemoKey, type Identity, rpc, storedDemoKey, walletClient, walletIdentity } from "./identity";
+import { demoIdentity, forgetDemoKey, type Identity, storedDemoKey, walletClient, walletIdentity } from "./identity";
 import { health, type Health } from "./relayer";
+import { Keys } from "./views/Keys";
+import { Overview } from "./views/Overview";
+import { Playground } from "./views/Playground";
+import { Sessions } from "./views/Sessions";
 
 const REFRESH_MS = 5_000;
+
+const NAV: { view: View; label: string; icon: IconName }[] = [
+  { view: "overview", label: "Overview", icon: "home" },
+  { view: "sessions", label: "Sessions", icon: "sessions" },
+  { view: "keys", label: "API keys", icon: "key" },
+  { view: "playground", label: "Playground", icon: "chat" },
+];
+
+function viewFromHash(): View {
+  const name = window.location.hash.replace(/^#\/?/, "");
+  return NAV.some((item) => item.view === name) ? (name as View) : "overview";
+}
+
+function useView(): [View, (view: View) => void] {
+  const [view, setView] = useState<View>(viewFromHash);
+  useEffect(() => {
+    const onHash = () => setView(viewFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const go = useCallback((next: View) => {
+    window.location.hash = `/${next}`;
+    window.scrollTo({ top: 0 });
+  }, []);
+  return [view, go];
+}
 
 export function App() {
   const connected = useConnectedWallet(walletClient);
   const { dispatch: disconnectWallet } = useDisconnect(walletClient);
+  const { toasts, notify, dismiss } = useToasts();
+  const [view, go] = useView();
   const [demo, setDemo] = useState<Identity | null>(null);
-  const [notice, setNotice] = useState<Notice | null>(null);
   const [relayer, setRelayer] = useState<Health | null>(null);
   const [mintChoice, setMintChoice] = useState<"usdt" | "usdc">(deployment?.mockUsdtMint ? "usdt" : "usdc");
   const [mint, setMint] = useState<MintInfo | null>(null);
   const [vault, setVault] = useState<VaultView | null>(null);
   const [sessions, setSessions] = useState<SessionView[]>([]);
-  const [keySession, setKeySession] = useState<Address | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Restore a demo wallet kept from an earlier visit (local chain only).
@@ -42,13 +69,12 @@ export function App() {
     return null;
   }, [demo, connected]);
 
-  const notify = useCallback((value: Notice) => setNotice(value), []);
-
   useEffect(() => {
     if (!deployment) return;
     const mintAddress = mintChoice === "usdt" ? deployment.mockUsdtMint : deployment.usdcMint;
     if (!mintAddress) return;
     setMint(null);
+    setVault(null);
     loadMint(mintAddress, mintChoice.toUpperCase())
       .then((info) => {
         setMint(info);
@@ -79,17 +105,6 @@ export function App() {
     return () => clearInterval(timer);
   }, [refresh]);
 
-  async function airdrop() {
-    if (!identity) return;
-    try {
-      await rpc.requestAirdrop(identity.address, 2_000_000_000n as never).send();
-      notify({ kind: "ok", text: "Airdropped 2 SOL for fees." });
-      setTimeout(() => void refresh(), 1_500);
-    } catch (error) {
-      notify({ kind: "error", text: errorMessage(error) });
-    }
-  }
-
   function disconnect() {
     if (demo) {
       forgetDemoKey();
@@ -103,98 +118,96 @@ export function App() {
 
   if (!deployment) {
     return (
-      <main className="page">
-        <div className="card">
+      <div className="center-screen">
+        <div className="panel narrow">
           <h2>No deployment for {cluster}</h2>
-          <p>
-            Run the seed script so <code>deployments/{cluster}.json</code> exists, then reload. See the local test guide.
+          <p className="muted">
+            Run the seed script so <code>deployments/{cluster}.json</code> exists, then reload.
           </p>
         </div>
-      </main>
+      </div>
     );
   }
 
+  if (!identity) {
+    return (
+      <>
+        <Connect onDemo={setDemo} />
+        <Toasts toasts={toasts} dismiss={dismiss} />
+      </>
+    );
+  }
+
+  const app: AppData | null =
+    mint && vault ? { identity, mint, vault, sessions, relayer: relayer ? address(relayer.relayer) : null, refresh, notify, go } : null;
+  const activeCount = sessions.filter(isActive).length;
+
   return (
-    <>
-      <header className="topbar">
-        <div className="brand">
-          <span className="logo" aria-hidden>
-            ◆
-          </span>
-          BlockRouter
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <Logo />
+          <span>BlockRouter</span>
         </div>
-        <div className="topbar-right">
-          <span className="pill">{cluster}</span>
-          <span className={relayer ? "pill ok" : "pill bad"} title={relayerUrl}>
-            {relayer ? `relayer online · ${relayer.providers.join(", ") || "mock"}` : "relayer offline"}
-          </span>
-          {identity ? (
-            <>
-              <span className="pill">
-                {identity.kind === "demo" ? "demo" : identity.label} · {shortAddress(identity.address)}
-              </span>
-              <button className="ghost small" onClick={disconnect}>
-                Disconnect
-              </button>
-            </>
-          ) : null}
-        </div>
-      </header>
-      <main className="page">
-        <NoticeBar notice={notice} onClose={() => setNotice(null)} />
-        {!identity ? (
-          <Connect onDemo={setDemo} />
-        ) : (
-          <>
-            <div className="toolbar">
-              <div className="segmented" role="group" aria-label="Stablecoin">
-                {deployment.mockUsdtMint ? (
-                  <button className={mintChoice === "usdt" ? "active" : ""} onClick={() => setMintChoice("usdt")}>
-                    USDT
-                  </button>
-                ) : null}
-                <button className={mintChoice === "usdc" ? "active" : ""} onClick={() => setMintChoice("usdc")}>
-                  USDC
-                </button>
-              </div>
-              {cluster === "localnet" && vault && vault.sol < 1_000_000_000n ? (
-                <button className="ghost small" onClick={airdrop}>
-                  Airdrop SOL for fees
-                </button>
-              ) : null}
+        <nav className="nav">
+          {NAV.map((item) => (
+            <a key={item.view} href={`#/${item.view}`} className={view === item.view ? "nav-item active" : "nav-item"}>
+              <Icon name={item.icon} />
+              <span>{item.label}</span>
+              {item.view === "sessions" && activeCount > 0 ? <span className="nav-badge">{activeCount}</span> : null}
+            </a>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <div className="sidebar-section">
+            <span className="sidebar-label">Stablecoin</span>
+            <Choice
+              options={[
+                ...(deployment.mockUsdtMint ? [{ value: "usdt" as const, label: "USDT" }] : []),
+                { value: "usdc" as const, label: "USDC" },
+              ]}
+              value={mintChoice}
+              onChange={setMintChoice}
+            />
+          </div>
+          <div className="status-list">
+            <span className="status-line">
+              <span className="dot ok" /> {cluster}
+            </span>
+            <span className="status-line" title={relayerUrl}>
+              <span className={relayer ? "dot ok" : "dot bad"} /> {relayer ? "Relayer online" : "Relayer offline"}
+            </span>
+          </div>
+          <div className="account">
+            <span className="account-avatar">{identity.address.slice(0, 2)}</span>
+            <div className="account-text">
+              <strong>{identity.kind === "demo" ? "Demo wallet" : identity.label}</strong>
+              <span className="mono muted small">{shortAddress(identity.address)}</span>
             </div>
-            {loadError ? <p className="error-text">{loadError}</p> : null}
-            {mint && vault ? (
-              <div className="grid">
-                <div className="col">
-                  <Vault identity={identity} mint={mint} vault={vault} onChanged={refresh} notify={notify} />
-                  <Sessions
-                    identity={identity}
-                    mint={mint}
-                    vault={vault}
-                    sessions={sessions}
-                    relayer={relayer ? address(relayer.relayer) : null}
-                    onChanged={refresh}
-                    onCreateKey={(session) => {
-                      setKeySession(session);
-                      document.getElementById("keys")?.scrollIntoView({ behavior: "smooth" });
-                    }}
-                    notify={notify}
-                  />
-                </div>
-                <div className="col">
-                  <div id="keys">
-                    <Keys identity={identity} sessions={sessions} preselect={keySession} notify={notify} />
-                  </div>
-                  <Playground sessions={sessions} mint={mint} />
-                </div>
-              </div>
-            ) : (
-              <p className="muted">Loading your vault…</p>
-            )}
-          </>
+            <button className="icon-button" onClick={disconnect} aria-label="Disconnect" title="Disconnect">
+              <Icon name="logout" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <main className={view === "playground" ? "content full" : "content"}>
+        {loadError ? <div className="banner bad">{loadError}</div> : null}
+        {!app ? (
+          <div className="loading">
+            <span className="spinner" /> Loading your vault…
+          </div>
+        ) : view === "sessions" ? (
+          <Sessions app={app} />
+        ) : view === "keys" ? (
+          <Keys app={app} />
+        ) : view === "playground" ? (
+          <Playground app={app} />
+        ) : (
+          <Overview app={app} />
         )}
       </main>
-    </>
+      <Toasts toasts={toasts} dismiss={dismiss} />
+    </div>
   );
 }
