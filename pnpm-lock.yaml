@@ -8,7 +8,30 @@ importers:
 
   .: {}
 
-  cli: {}
+  cli:
+    dependencies:
+      '@anchor-lang/core':
+        specifier: 1.2.1
+        version: 1.2.1(bufferutil@4.1.0)(typescript@5.9.3)
+      '@solana/kit':
+        specifier: 8.4.0
+        version: 8.4.0(bufferutil@4.1.0)(typescript@5.9.3)
+      commander:
+        specifier: ^14.0.2
+        version: 14.0.2
+      toml:
+        specifier: ^5.0.0
+        version: 5.0.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.1
+        version: 24.19.1
+      prettier:
+        specifier: ^3.9.9
+        version: 3.9.9
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   relayer:
     dependencies:
