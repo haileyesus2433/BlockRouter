@@ -1,1 +1,6 @@
 !.env.example
+
+# Local usage database
+*.db
+*.db-shm
+*.db-wal
