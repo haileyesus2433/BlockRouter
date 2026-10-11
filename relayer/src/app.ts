@@ -23,11 +23,13 @@ export type Deps = {
 export function createApp(deps: Deps) {
   const app = new Hono();
 
+  // Exception text can carry upstream credentials, so it is never returned or logged.
   app.onError((error, c) => {
     if (error instanceof ApiError) return errorResponse(c, error);
-    console.error("unhandled error", error instanceof Error ? error.message : error);
+    console.error(JSON.stringify({ event: "unhandled_error", kind: error instanceof Error ? error.name : typeof error }));
     return errorResponse(c, new ApiError(500, "api_error", "internal_error", "internal relayer error"));
   });
+  app.notFound((c) => errorResponse(c, new ApiError(404, "not_found_error", "not_found", "no such route")));
 
   app.get("/health", (c) =>
     c.json({ status: "ok", cluster: deps.config.cluster, provider: deps.provider.id }),

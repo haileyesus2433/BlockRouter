@@ -2,6 +2,7 @@ import type { Chain, SessionState } from "./chain/types";
 import type { Config } from "./config";
 import { type Ledger, worstCaseRates } from "./ledger";
 import { charge } from "./pricing";
+import type { Redactor } from "./redact";
 import type { Store, UsageRecord } from "./store";
 
 const BPS = 10_000n;
@@ -21,7 +22,14 @@ export class SettlementWorker {
   private running = false;
 
   constructor(
-    private readonly deps: { config: Config; chain: Chain; store: Store; ledger: Ledger; nowSecs: () => number },
+    private readonly deps: {
+      config: Config;
+      chain: Chain;
+      store: Store;
+      ledger: Ledger;
+      nowSecs: () => number;
+      redact?: Redactor;
+    },
   ) {}
 
   start(): void {
@@ -101,7 +109,8 @@ export class SettlementWorker {
       );
       return { status: "settled", signature, promptTokens, completionTokens };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const raw = error instanceof Error ? error.message : String(error);
+      const message = this.deps.redact ? this.deps.redact(raw) : raw;
       store.recordSettleError(key, message);
       ledger.endSettle(key);
       console.error(JSON.stringify({ event: "settle_failed", session: key, trigger, error: message }));

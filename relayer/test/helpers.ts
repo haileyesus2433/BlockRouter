@@ -23,6 +23,7 @@ import { Store } from "../src/store";
 
 export function testConfig(overrides: Partial<Config> = {}): Config {
   return {
+    host: "127.0.0.1",
     port: 0,
     cluster: "localnet",
     rpcUrl: "http://127.0.0.1:8899",
