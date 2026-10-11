@@ -2,6 +2,7 @@ packages:
   - client
   - relayer
   - cli
+  - web
 
 allowBuilds:
   esbuild: true
