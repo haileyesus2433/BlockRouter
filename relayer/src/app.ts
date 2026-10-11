@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 
 import type { Chain } from "./chain/types";
 import type { Config } from "./config";
@@ -8,6 +9,7 @@ import type { Provider } from "./providers/types";
 import { chatRoutes } from "./routes/chat";
 import { infoRoutes } from "./routes/info";
 import { keyRoutes } from "./routes/keys";
+import { sessionRoutes } from "./routes/sessions";
 import type { Store } from "./store";
 
 export type Deps = {
@@ -34,6 +36,16 @@ export function createApp(deps: Deps) {
   });
   app.notFound((c) => errorResponse(c, new ApiError(404, "not_found_error", "not_found", "no such route")));
 
+  app.use(
+    "*",
+    cors({
+      origin: deps.config.corsOrigins,
+      allowHeaders: ["Authorization", "Content-Type", "X-BlockRouter-Address", "X-BlockRouter-Timestamp", "X-BlockRouter-Signature"],
+      allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+      exposeHeaders: ["X-BlockRouter-Session", "X-BlockRouter-Charge", "X-BlockRouter-Remaining", "X-BlockRouter-Session-Expires"],
+    }),
+  );
+
   app.get("/health", (c) =>
     c.json({
       status: "ok",
@@ -43,6 +55,7 @@ export function createApp(deps: Deps) {
     }),
   );
   app.route("/v1/keys", keyRoutes(deps));
+  app.route("/v1/sessions", sessionRoutes(deps));
   app.route("/v1", infoRoutes(deps));
   app.route("/v1", chatRoutes(deps));
 

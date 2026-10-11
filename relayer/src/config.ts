@@ -27,6 +27,8 @@ export type Config = {
   settleIntervalSecs: number;
   workerTickSecs: number;
   rateLimitPerMinute: number;
+  /** Browser origins allowed to call the API (the dashboard). */
+  corsOrigins: string[];
   /** OpenAI-compatible upstreams by provider id. Empty means the mock provider serves everything. */
   providers: Record<string, UpstreamConfig>;
 };
@@ -103,6 +105,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     settleIntervalSecs: int(env, "SETTLE_INTERVAL_SECS", 0),
     workerTickSecs: int(env, "WORKER_TICK_SECS", 15),
     rateLimitPerMinute: int(env, "RATE_LIMIT_PER_MINUTE", 60),
+    corsOrigins: (env.CORS_ORIGINS ?? "http://localhost:5173,http://127.0.0.1:5173")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
     providers,
   };
 }

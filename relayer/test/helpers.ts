@@ -38,6 +38,7 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     settleIntervalSecs: 0,
     workerTickSecs: 15,
     rateLimitPerMinute: 1_000,
+    corsOrigins: ["http://localhost:5173"],
     providers: {},
     ...overrides,
   };

@@ -140,6 +140,15 @@ export class Store {
       .all(owner) as Row[]).map(toKey);
   }
 
+  /** Sessions this wallet has created keys for, newest first. */
+  sessionsForOwner(owner: string): string[] {
+    return (this.db
+      .prepare(
+        "SELECT session_pubkey, MAX(created_at) AS latest FROM api_keys WHERE owner_pubkey = ? GROUP BY session_pubkey ORDER BY latest DESC",
+      )
+      .all(owner) as Row[]).map((row) => String(row.session_pubkey));
+  }
+
   revokeKey(id: string, owner: string, now: number): boolean {
     const result = this.db
       .prepare("UPDATE api_keys SET revoked_at = ? WHERE id = ? AND owner_pubkey = ? AND revoked_at IS NULL")

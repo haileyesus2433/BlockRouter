@@ -1,10 +1,10 @@
-import { type Address, address, isAddress } from "@solana/kit";
-import { WALLET_AUTH_HEADERS } from "@blockrouter/client";
+import { address, isAddress } from "@solana/kit";
 import { Hono } from "hono";
 
-import { generateKey, hashKey, verifyWalletRequest } from "../auth";
+import { generateKey, hashKey } from "../auth";
 import { ApiError, invalidRequest } from "../errors";
 import type { Deps } from "../app";
+import { walletAuth, type WalletEnv } from "../wallet-auth";
 
 const MAX_NAME_LENGTH = 64;
 export const MAX_DEFAULT_MAX_TOKENS = 200_000;
@@ -17,25 +17,9 @@ function parseMaxTokens(value: unknown): number | null {
   return value as number;
 }
 
-type Env = { Variables: { wallet: Address } };
-
 export function keyRoutes(deps: Deps) {
-  const routes = new Hono<Env>();
-
-  routes.use("*", async (c, next) => {
-    const wallet = await verifyWalletRequest(
-      {
-        address: c.req.header(WALLET_AUTH_HEADERS.address),
-        signature: c.req.header(WALLET_AUTH_HEADERS.signature),
-        timestamp: c.req.header(WALLET_AUTH_HEADERS.timestamp),
-      },
-      c.req.method,
-      new URL(c.req.url).pathname,
-      deps.nowSecs(),
-    );
-    c.set("wallet", wallet);
-    await next();
-  });
+  const routes = new Hono<WalletEnv>();
+  routes.use("*", walletAuth(deps));
 
   routes.post("/", async (c) => {
     const body = await c.req.json().catch(() => null);
