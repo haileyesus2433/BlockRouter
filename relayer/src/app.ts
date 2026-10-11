@@ -40,7 +40,7 @@ export function createApp(deps: Deps) {
     "*",
     cors({
       origin: deps.config.corsOrigins,
-      allowHeaders: ["Authorization", "Content-Type", "X-BlockRouter-Address", "X-BlockRouter-Timestamp", "X-BlockRouter-Signature"],
+      allowHeaders: ["Authorization", "Content-Type", "X-BlockRouter-Address", "X-BlockRouter-Timestamp", "X-BlockRouter-Signature", "X-BlockRouter-Source"],
       allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
       exposeHeaders: ["X-BlockRouter-Session", "X-BlockRouter-Charge", "X-BlockRouter-Remaining", "X-BlockRouter-Session-Expires"],
     }),

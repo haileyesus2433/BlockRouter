@@ -33,6 +33,20 @@ export type UsageRecord = {
   models: ModelUsageRecord[];
 };
 
+/** One served request, for the activity log. Token counts and charge only, never content. */
+export type RequestRecord = {
+  id: number;
+  sessionPubkey: string;
+  keyId: string;
+  keyName: string | null;
+  modelId: number;
+  promptTokens: number;
+  completionTokens: number;
+  charge: bigint;
+  client: string;
+  createdAt: number;
+};
+
 type Row = Record<string, unknown>;
 
 function toKey(row: Row): ApiKeyRecord {
@@ -102,6 +116,18 @@ export class Store {
         completion_tokens INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (session_pubkey, model_id)
       );
+      CREATE TABLE IF NOT EXISTS requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_pubkey TEXT NOT NULL,
+        key_id TEXT NOT NULL,
+        model_id INTEGER NOT NULL,
+        prompt_tokens INTEGER NOT NULL,
+        completion_tokens INTEGER NOT NULL,
+        charge INTEGER NOT NULL,
+        client TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS requests_session ON requests (session_pubkey, id);
     `);
     this.migrate();
   }
@@ -210,6 +236,45 @@ export class Store {
            requests = requests + 1`,
       )
       .run(session, prompt, completion, estimatedPrompt, now);
+  }
+
+  logRequest(entry: Omit<RequestRecord, "id" | "keyName">): void {
+    this.db
+      .prepare(
+        `INSERT INTO requests (session_pubkey, key_id, model_id, prompt_tokens, completion_tokens, charge, client, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        entry.sessionPubkey,
+        entry.keyId,
+        entry.modelId,
+        entry.promptTokens,
+        entry.completionTokens,
+        entry.charge,
+        entry.client,
+        entry.createdAt,
+      );
+  }
+
+  /** Newest first. */
+  requestsFor(session: string, limit: number): RequestRecord[] {
+    return (this.db
+      .prepare(
+        `SELECT requests.*, api_keys.name AS key_name FROM requests LEFT JOIN api_keys ON api_keys.id = requests.key_id
+         WHERE requests.session_pubkey = ? ORDER BY requests.id DESC LIMIT ?`,
+      )
+      .all(session, limit) as Row[]).map((row) => ({
+      id: Number(row.id),
+      sessionPubkey: String(row.session_pubkey),
+      keyId: String(row.key_id),
+      keyName: row.key_name === null ? null : String(row.key_name),
+      modelId: Number(row.model_id),
+      promptTokens: Number(row.prompt_tokens),
+      completionTokens: Number(row.completion_tokens),
+      charge: BigInt(row.charge as number),
+      client: String(row.client),
+      createdAt: Number(row.created_at),
+    }));
   }
 
   requestClose(session: string, now: number): void {

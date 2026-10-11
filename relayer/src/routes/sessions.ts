@@ -1,6 +1,7 @@
 import { type Address, address, isAddress } from "@solana/kit";
 import { Hono } from "hono";
 
+import { activity } from "../activity";
 import type { Deps } from "../app";
 import { ApiError, invalidRequest } from "../errors";
 import { jsonInt } from "../ledger";
@@ -51,6 +52,12 @@ export function sessionRoutes(deps: Deps) {
     const data = [];
     for (const session of sessions) data.push(await describe(address(session)));
     return c.json({ object: "list", data });
+  });
+
+  routes.get("/:address/requests", (c) => {
+    const session = c.req.param("address");
+    if (!deps.store.sessionsForOwner(c.get("wallet")).includes(session)) throw notYours();
+    return c.json(activity(deps, session, c.req.query("limit")));
   });
 
   routes.post("/:address/close", async (c) => {

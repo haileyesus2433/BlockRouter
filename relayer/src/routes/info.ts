@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 
+import { activity } from "../activity";
 import type { Deps } from "../app";
 import { verifyApiKey } from "../auth";
 import { jsonInt } from "../ledger";
@@ -57,6 +58,12 @@ export function infoRoutes(deps: Deps) {
       requests: usage?.requests ?? 0,
       expires_at: jsonInt(session.expiresAt),
     });
+  });
+
+  // Works after settlement too, so a tool can show what a finished session served.
+  routes.get("/session/requests", (c) => {
+    const key = verifyApiKey(deps.store, c.req.header("Authorization"));
+    return c.json(activity(deps, key.sessionPubkey, c.req.query("limit")));
   });
 
   // Asks the worker to settle now and release the unused reservation. The key stops working.
