@@ -1,111 +1,90 @@
-# BlockRouter relayer scaffold
+# BlockRouter relayer
 
-Issue #24 adds a Hono HTTP server, validated environment configuration, a
-read-only Solana client and the Provider contract. It implements no upstream AI
-requests, signing, settlement, mock provider, chat-completions routes or SSE.
+An OpenAI-compatible gateway in front of on-chain sessions. Any OpenAI client (OpenCode, Cline,
+Continue, Aider, the OpenAI SDKs) works with a base URL and a key.
 
-## Setup and execution
+## Run
 
-Use Node.js 22+ and the repository-pinned pnpm. From the repository root:
+Node.js 22+ and the repository-pinned pnpm. From the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm --filter @blockrouter/relayer build
-# Generate the existing Anchor IDL if target/idl/blockrouter.json is absent.
-anchor build
-pnpm --filter @blockrouter/relayer start
-curl http://127.0.0.1:3000/health
+cp relayer/.env.example relayer/.env       # then edit
+cd relayer && node --env-file=.env --import tsx src/server.ts
+curl http://127.0.0.1:8787/health
 ```
 
-Startup validates configuration and initializes the client offline before
-listening. It requires the generated IDL, but no RPC service, wallet, funds or
-upstream credentials. `/health` returns HTTP 200:
+Without `UPSTREAM_BASE_URL` and `UPSTREAM_API_KEY` it serves the deterministic mock provider. See
+`.env.example` for every setting.
 
-```json
-{ "status": "ok", "service": "blockrouter-relayer" }
+The relayer keypair (`RELAYER_KEYPAIR`) signs settlements only. Sessions must be opened with
+`--relayer <its address>`, which is printed at startup.
+
+## API
+
+| Route | Auth | |
+|---|---|---|
+| `GET /health` | none | liveness |
+| `GET /v1/models` | none | registered models with raw on-chain rates |
+| `POST /v1/keys` | wallet signature | create a key bound to one session; plaintext returned once |
+| `GET /v1/keys` | wallet signature | list your keys |
+| `DELETE /v1/keys/:id` | wallet signature | revoke immediately |
+| `POST /v1/chat/completions` | `Bearer brk_live_...` | OpenAI chat, `stream: true` for SSE |
+| `GET /v1/session/current` | `Bearer` | cap, pending usage, remaining, expiry |
+| `POST /v1/session/close` | `Bearer` | settle now and release the unused reservation |
+
+Rates are base units per 1,000,000 tokens, exactly as stored on-chain.
+
+**Wallet signature.** Key endpoints take `X-BlockRouter-Address`, `X-BlockRouter-Timestamp` (unix
+seconds, within 5 minutes), and `X-BlockRouter-Signature` (base58 Ed25519) over:
+
+```
+BlockRouter API request
+Address: <address>
+Method: <METHOD>
+Path: <path>
+Timestamp: <timestamp>
 ```
 
-This is process liveness, not RPC, deployment or provider readiness. Unknown
-routes return JSON 404; request exceptions return a generic JSON 500 without
-logging or returning the original error.
+**Responses** carry `X-BlockRouter-Session`, `X-BlockRouter-Charge`, `X-BlockRouter-Remaining`,
+and `X-BlockRouter-Session-Expires`. For streams the charge header is the held maximum; the actual
+charge is in the final usage chunk.
 
-For development, use two terminals:
+**Errors** use the OpenAI envelope `{ "error": { "message", "type", "code" } }` with actionable
+messages: 401 `invalid_api_key` / `key_revoked`, 402 `no_active_session` / `session_expired` /
+`session_cap_exhausted`, 403 `model_not_allowed`, 404 `model_not_found`, 429
+`rate_limit_exceeded`, 502 `upstream_error` (nothing is charged).
+
+## Billing
+
+- A key is bound to one session, so a leaked key costs at most that session's cap.
+- Pre-flight clamps `max_tokens` to what the session can still afford, priced at the higher of the
+  current and any pending (timelocked) rate. The maximum is held while the request is in flight, so
+  concurrent requests cannot overspend.
+- The provider's reported usage is billed and written to SQLite before the response ends, so a
+  crash does not lose it. An aborted stream bills what was already delivered.
+- The settlement worker submits raw token counts only; the program computes the charge. Settling
+  closes the session, so each session settles once: on `/v1/session/close`, at
+  `SETTLE_THRESHOLD_BPS` of the cap, or within `SETTLE_BEFORE_EXPIRY_SECS` of expiry.
+
+## What is trusted
+
+The program enforces the cap, the rate, which model is billed, and which relayer may settle. The
+relayer is trusted for the token counts it reports and for which model actually served the request.
+Neither is verified on-chain.
+
+## Security
+
+- Logs hold metadata and token counts only, never prompt or completion content.
+- Exception text is never returned or logged. RPC URLs and upstream keys are redacted from
+  settlement errors before they are logged or stored.
+- Configuration errors are fixed messages that never echo the supplied values.
+- Upstream API keys come from the environment only.
+
+## Tests
 
 ```sh
-pnpm --filter @blockrouter/relayer dev
-pnpm --filter @blockrouter/relayer watch
+pnpm -C relayer test
 ```
 
-`dev` builds and watches the compiled server; `watch` recompiles TypeScript on
-changes. SIGINT/SIGTERM close the HTTP listener.
-
-## Environment
-
-| Variable         | Default / policy                                                     |
-| ---------------- | -------------------------------------------------------------------- |
-| `HOST`           | `127.0.0.1`; an IP address or `localhost`                            |
-| `PORT`           | `3000`; integer 1–65535                                              |
-| `SOLANA_CLUSTER` | Anchor.toml provider cluster; localnet, devnet or mainnet-beta       |
-| `RPC_URL`        | Standard endpoint for the selected cluster; HTTP(S) override allowed |
-| `PROGRAM_ID`     | Anchor.toml program ID; explicit values must match it                |
-| `IDL_PATH`       | Checkout's `target/idl/blockrouter.json`                             |
-| `OPENAI_API_KEY` | Optional, environment only; reserved for a future provider           |
-
-No environment variables are mandatory with the current development defaults.
-No `.env` file is loaded automatically. Supply variables through the process
-environment. Alternatively, copy `.env.example` to a local ignored `.env` and
-use Node's explicit env-file support from `relayer/`:
-
-```sh
-node --env-file=.env dist/src/server.js
-```
-
-Relative IDL paths resolve from the process working directory (the relayer
-directory when using its pnpm scripts). RPC URLs cannot contain userinfo or a
-fragment. Their query parameters may contain private credentials and are never
-logged. Startup logs never print configuration, API keys, SDK exceptions or
-stack traces. Upstream keys have no file or hardcoded fallback; the safe example
-contains no credential values. Local `.env` files remain ignored by Git.
-
-## Client and Provider API
-
-`src/app.ts` constructs the app without reading environment variables, files or
-contacting services. `src/server.ts` performs configuration, client initialization
-and listening. `src/config.ts`, `src/client.ts` and `src/provider.ts` are reusable
-modules for later features.
-
-The client uses `@anchor-lang/core` 1.2.1 and `@solana/kit` 8.4.0. Anchor still uses
-Web3.js Connection/provider types internally: `{ connection }` is its supported
-read-only provider. Kit RPC stays separate. No signer or Anchor wallet adapter is
-needed here. The relayer does not depend on the CLI package or its unmerged PR.
-It follows the same verified SDK boundary without importing the wallet loader.
-
-Program identity is read from Anchor.toml and must agree with the IDL and any
-environment value. Mainnet selection uses this configured address offline and
-does not assert that a mainnet deployment exists. The known deployment-keypair
-and program-ID mismatch remains unresolved; payment-mint denomination policy and
-legacy Session migration also remain deployment prerequisites.
-
-`Provider` exposes `id`, `chat(request): AsyncIterable<ChatChunk>` and
-`countTokens(request): number`. `ChatRequest` contains a model name and text
-messages with system/user/assistant roles. `ChatChunk` contains either a text
-delta or a terminal event with finish reason and optional token usage.
-`countTokens` estimates prompt usage; reported usage belongs to the terminal
-event. Adapters must produce nonnegative integer token counts. The transport
-layer will handle SSE framing and error mapping separately. Tool calls,
-multimodal input and actual provider implementations are outside this scaffold.
-
-## Validation
-
-```sh
-pnpm -r test
-pnpm --filter @blockrouter/relayer typecheck
-pnpm --filter @blockrouter/relayer build
-pnpm -r --if-present run build
-pnpm --filter @blockrouter/relayer format:check
-git diff --check
-```
-
-Tests use temporary IDLs and nonsecret sentinel values, Hono's in-memory request
-API and one ephemeral local HTTP listener. They use no external RPC, AI service,
-real wallet or credentials. Rust/Anchor source is unchanged.
+Tests run offline against the mock provider and an in-memory chain.

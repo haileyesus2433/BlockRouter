@@ -3,30 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "dependencies": {
-    "@anchor-lang/core": "1.2.1",
-    "@solana/kit": "8.4.0",
-    "commander": "^14.0.2",
-    "toml": "^5.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^24.19.1",
-    "prettier": "^3.9.9",
-    "typescript": "^5.9.3"
-  },
   "bin": {
-    "br": "dist/src/index.js"
+    "br": "./bin/br.js"
   },
-  "files": [
-    "dist/src",
-    "README.md"
-  ],
   "scripts": {
-    "build": "tsc && chmod +x dist/src/index.js",
-    "br": "node dist/src/index.js",
-    "typecheck": "tsc --noEmit",
-    "test": "pnpm build && node --test dist/tests/*.test.js",
-    "format": "prettier --write src tests package.json tsconfig.json README.md",
-    "format:check": "prettier --check src tests package.json tsconfig.json README.md"
+    "br": "node bin/br.js",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@blockrouter/client": "workspace:*",
+    "@solana-program/token": "0.17.0",
+    "@solana/kit": "8.4.0",
+    "@solana/kit-plugin-rpc": "0.19.0",
+    "@solana/kit-plugin-signer": "0.19.0",
+    "commander": "15.0.0",
+    "tsx": "4.23.15"
   }
 }

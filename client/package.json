@@ -1,0 +1,23 @@
+{
+  "name": "@blockrouter/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "codama run js",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@solana/kit": "8.4.0",
+    "@solana/program-client-core": "8.4.0"
+  },
+  "devDependencies": {
+    "@codama/nodes-from-anchor": "1.5.6",
+    "@codama/renderers-js": "2.5.0",
+    "codama": "1.11.0"
+  }
+}

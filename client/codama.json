@@ -1,0 +1,9 @@
+{
+  "idl": "../target/idl/blockrouter.json",
+  "scripts": {
+    "js": {
+      "from": "@codama/renderers-js",
+      "args": ["."]
+    }
+  }
+}

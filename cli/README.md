@@ -1,91 +1,74 @@
-# BlockRouter CLI
+# br: BlockRouter CLI
 
-Issue #21 provides the `br` scaffold, existing-wallet loading and offline client
-initialization. Vault, Session and key-management commands will follow separately.
+Fund a self-custodial vault, open capped sessions for a relayer, and reclaim or withdraw what you
+did not spend.
 
-From the repository root, using Node.js 22+ and the pinned pnpm version:
+## Setup
+
+Node.js 22+ and the repository-pinned pnpm. From the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm --filter @blockrouter/cli build
-pnpm --filter @blockrouter/cli br --help
-pnpm --filter @blockrouter/cli br --version
+pnpm br --help
 ```
 
-The package declares the `br` binary at `dist/src/index.js`. To invoke the
-executable directly after building:
+`pnpm br ...` runs `cli/bin/br.js`, which loads the TypeScript sources through `tsx`. There is no
+build step.
+
+## Global options
+
+| Option | Default | |
+|---|---|---|
+| `-c, --cluster <name>` | `devnet` | `devnet` or `localnet` |
+| `-u, --url <url>` | the cluster's public RPC | absolute HTTP(S) URL, no userinfo or fragment |
+| `-k, --keypair <path>` | `$BR_KEYPAIR`, then `~/.config/solana/id.json` | existing Solana CLI keypair |
+
+Cluster settings (program id, mints, models, relayer) come from `deployments/<cluster>.json`.
+
+## Commands
 
 ```sh
-./cli/dist/src/index.js --help
+br wallet                                   # address, SOL balance, cluster, program
+
+br vault init [--mint usdt|usdc|<address>]
+br vault deposit 10
+br vault withdraw 2.5
+br vault withdraw all                       # everything not reserved by a session
+br vault status                             # balance, reserved, available
+
+br session open --cap 5 --model deepseek-v3 [--hours 24 | --minutes 30] [--relayer <address>]
+br session status                           # open sessions on your vault
+br session reclaim [id]                     # release expired, unsettled sessions
 ```
 
-Initialization needs the generated project IDL. Generate it with the project's
-existing Anchor build workflow, then select an **existing** Solana CLI wallet:
+Amounts are whole tokens (`2.5` means 2.5 USDT). `--mint` defaults to the cluster's mock USDT.
+Program errors are decoded, for example `Session has not expired yet (program error 6015)`.
+
+## Wallet handling
+
+- The CLI only reads an existing keypair. It never generates, writes, or prints key material.
+- The file must be a JSON array of 64 bytes. Byte values and the match between the private and
+  public halves are checked, and the loaded private key is non-extractable.
+- Error messages never include file contents, so a malformed key does not leak through a parser
+  error.
+- Keep keypairs out of git (`keys/` is ignored) with restrictive file permissions.
+
+RPC URLs can carry API keys, so `br` prints only the host of a custom `--url`, never its path or
+query string.
+
+## Client
+
+Instructions, accounts, PDAs, and errors come from `@blockrouter/client`, the Codama-generated
+`@solana/kit` client in `client/`. After changing the program, regenerate it:
 
 ```sh
-anchor build
-pnpm --filter @blockrouter/cli br --wallet ~/.config/solana/id.json --cluster localnet
-pnpm --filter @blockrouter/cli br --wallet /absolute/path/wallet.json --cluster devnet
-pnpm --filter @blockrouter/cli br --cluster mainnet-beta --rpc-url https://api.mainnet-beta.solana.com --idl /absolute/path/blockrouter.json
+anchor build --arch v2 && pnpm -C client generate
 ```
 
-Relative wallet and IDL paths resolve from the invocation's working directory
-(the package directory when using the pnpm script). `~/` wallet paths expand to
-the user's home directory. Defaults come from the checkout's `Anchor.toml`:
-currently localnet and `~/.config/solana/id.json`. The generated IDL defaults to
-`target/idl/blockrouter.json` in this checkout. Keep the CLI in the checkout; this
-private workspace package is not a standalone published distribution.
-
-Wallets must be 64-byte Solana keypair JSON arrays. Byte values and the consistency
-of the private/public halves are validated. Missing or invalid wallets fail with
-exit code 1. The CLI never generates or overwrites wallets, and reports only the
-public address. Keep wallet files outside source control and use restrictive file
-permissions. Secrets are not included in parser or cryptographic error messages.
-
-Clusters are `localnet`, `devnet`, and `mainnet-beta`, with their standard public
-RPC endpoints. `--rpc-url` accepts an absolute HTTP(S) URL without userinfo or a
-fragment. An override changes the endpoint only; it does not prove which cluster
-the endpoint serves. RPC URLs (including possible query-string credentials) are
-not printed by initialization.
-
-## Client API and SDK boundary
-
-`src/wallet.ts` loads a nonextractable Solana Kit `KeyPairSigner`.
-`src/config.ts` reads Anchor configuration and selects the endpoint.
-`src/client.ts` returns an Anchor `Program`, a Kit RPC client, the Kit signer and
-the configured program address. `src/index.ts` is the Commander entry point.
-
-The selected `@anchor-lang/core` 1.2.1 still uses Web3.js `Connection` and provider
-types internally; it does **not** accept a Kit signer as an Anchor wallet. The
-scaffold uses Anchor's supported read-only provider (`{ connection }`) and keeps
-the Kit signer separate. Future commands must explicitly construct and sign
-transactions using the appropriate SDK, rather than passing incompatible types
-or relying on an implicit global provider. No signing adapter or transaction
-submission is implemented here.
-
-The program address comes from `Anchor.toml` and must match the IDL. Its current
-localnet and devnet declarations agree. Mainnet selection initializes that same
-address offline; it does not imply a verified mainnet deployment. No deployment
-is verified or RPC called during initialization, help or version handling.
-
-Deployment remains blocked by the known local deployment-keypair/program-ID
-mismatch, the unresolved payment-mint denomination policy and legacy Session
-layout migration. This CLI does not alter IDs, keys or legacy accounts. Resolve
-these separately before using transaction commands or deploying the program.
-
-## Validation
+## Tests
 
 ```sh
-pnpm --filter @blockrouter/cli typecheck
-pnpm --filter @blockrouter/cli test
-pnpm --filter @blockrouter/cli format:check
-pnpm -r --if-present run build
-git diff --check
+pnpm -C cli test
 ```
 
-Tests use temporary wallet files containing a public RFC 8032 test vector, an
-offline fixture IDL and child processes for the actual executable. They require
-no real wallets, RPC service or funds. There is no existing JavaScript lint setup;
-TypeScript's strict checks and Prettier cover the scaffold. Optional native
-websocket install scripts are disabled through the workspace configuration;
-websocket dependencies support JavaScript fallbacks.
+Tests run offline and use the public RFC 8032 test vector as a wallet, never a funded key.

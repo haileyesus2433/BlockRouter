@@ -51,12 +51,34 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
 
-      # The program keypair is not in git, so skip the declare_id check.
+      # Keypair is not in git, so skip the declare_id check. v2 matches what devnet runs.
       - name: Build
-        run: anchor build --ignore-keys
+        run: anchor build --ignore-keys --arch v2
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Test
         run: cargo test
+
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Version comes from packageManager in package.json.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
