@@ -79,13 +79,18 @@ solana program deploy "$SO" \
   --max-sign-attempts 20 \
   --use-rpc
 
-if anchor idl fetch "$declared_id" --provider.cluster devnet >/dev/null 2>&1; then
+if anchor idl fetch "$declared_id" --provider.cluster "$URL" >/dev/null 2>&1; then
   anchor idl upgrade "$declared_id" --filepath "$IDL" \
-    --provider.cluster devnet --provider.wallet "$WALLET"
+    --provider.cluster "$URL" --provider.wallet "$WALLET"
 else
   anchor idl init "$declared_id" --filepath "$IDL" \
-    --provider.cluster devnet --provider.wallet "$WALLET"
+    --provider.cluster "$URL" --provider.wallet "$WALLET"
 fi
 
 echo
-echo "deployed ($mode): https://explorer.solana.com/address/$declared_id?cluster=devnet"
+if [ "$URL" = "https://api.devnet.solana.com" ]; then
+  explorer_cluster="cluster=devnet"
+else
+  explorer_cluster="cluster=custom&customUrl=$URL"
+fi
+echo "deployed ($mode): https://explorer.solana.com/address/$declared_id?$explorer_cluster"
