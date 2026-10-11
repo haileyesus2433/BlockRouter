@@ -63,6 +63,7 @@ window is planned but not built.
 | `client` | `@solana/kit` client generated from the IDL with Codama |
 | `cli` | `br`, the command-line wallet ([README](cli/README.md)) |
 | `relayer` | OpenAI-compatible gateway and settlement worker ([README](relayer/README.md)) |
+| `web` | browser dashboard: vault, sessions, keys, playground ([README](web/README.md)) |
 | `scripts` | devnet deploy and seed |
 | `deployments` | per-cluster program id, mints, models, relayer |
 
@@ -109,6 +110,9 @@ done:
 curl -X POST $OPENAI_BASE_URL/session/close -H "Authorization: Bearer $OPENAI_API_KEY"
 pnpm br -c localnet vault withdraw all
 ```
+
+Or do all of step 4 in the browser: `pnpm -C web dev`, open http://127.0.0.1:5173, and load
+`keys/demo-user.json` as the demo wallet.
 
 Key files under `keys/` are created locally and are git-ignored. Generate them with
 `solana-keygen new -o keys/<name>.json`.
