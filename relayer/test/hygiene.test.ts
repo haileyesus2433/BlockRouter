@@ -112,3 +112,31 @@ test("startup failures exit non-zero without revealing secrets", () => {
   assert.match(missingKey.stderr, /startup failed/);
   assert.ok(!(missingKey.stdout + missingKey.stderr).includes(SECRET));
 });
+
+test("upstream failures are logged by status code, never by body", async () => {
+  const { UpstreamStatusError } = await import("../src/providers/types");
+  const { issueKey, openSession, randomAddress } = await import("./helpers");
+  const chain = fakeChain();
+  const failing = {
+    id: "failing",
+    countTokens: () => 1,
+    async *chat(): AsyncIterable<never> {
+      throw new UpstreamStatusError(402);
+    },
+  };
+  const deps = testDeps({ chain, provider: failing });
+  const session = openSession(chain, randomAddress());
+  const key = issueKey(deps, session);
+  const logs = await captureConsole(async () => {
+    const response = await createApp(deps).request("/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "deepseek-v3", messages: [{ role: "user", content: SECRET }] }),
+    });
+    assert.equal(response.status, 502);
+  });
+  const entry = JSON.parse(logs.split("\n").find((line) => line.includes("upstream_error"))!);
+  assert.equal(entry.status, 402);
+  assert.equal(entry.model, "deepseek-v3");
+  assert.ok(!logs.includes(SECRET));
+});

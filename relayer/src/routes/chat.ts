@@ -17,6 +17,7 @@ import {
   PASSTHROUGH_OPTIONS,
   type ToolCall,
   type ToolCallDelta,
+  UpstreamStatusError,
   type Usage,
 } from "../providers/types";
 import { RateLimiter } from "../rate-limit";
@@ -232,8 +233,9 @@ export function chatRoutes(deps: Deps) {
           else if (chunk.type === "tool_call") toolCalls.add(chunk.delta);
           else usage = chunk.usage;
         }
-      } catch {
+      } catch (error) {
         settle(null);
+        logUpstreamFailure(active, choice, error);
         throw upstreamError();
       }
       if (!usage) {
@@ -307,11 +309,12 @@ export function chatRoutes(deps: Deps) {
           streamedChars += chunk.content.length;
           await stream.writeSSE({ data: JSON.stringify(frame({ content: chunk.content }, null)) });
         }
-      } catch {
+      } catch (error) {
         if (stream.aborted) return;
         settle(null);
-        const error = upstreamError();
-        await stream.writeSSE({ data: JSON.stringify({ error: { message: error.message, type: error.type, code: error.code } }) });
+        logUpstreamFailure(active, choice, error);
+        const failure = upstreamError();
+        await stream.writeSSE({ data: JSON.stringify({ error: { message: failure.message, type: failure.type, code: failure.code } }) });
         await stream.writeSSE({ data: "[DONE]" });
         return;
       }
@@ -364,3 +367,16 @@ function log(active: ActiveSession, choice: ModelChoice, usage: Usage, estimated
   );
 }
 
+
+// Status codes only: upstream messages and network errors can carry request content or credentials.
+function logUpstreamFailure(active: ActiveSession, choice: ModelChoice, error: unknown) {
+  console.error(
+    JSON.stringify({
+      event: "upstream_error",
+      session: active.session.address,
+      model: choice.alias.alias,
+      provider: choice.alias.provider ?? "mock",
+      ...(error instanceof UpstreamStatusError ? { status: error.status } : { kind: error instanceof Error ? error.name : typeof error }),
+    }),
+  );
+}

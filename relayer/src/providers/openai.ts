@@ -1,5 +1,5 @@
 import { countPromptTokens } from "./mock";
-import type { ChatRequest, Chunk, Provider, Usage } from "./types";
+import { type ChatRequest, type Chunk, type Provider, UpstreamStatusError, type Usage } from "./types";
 
 const CHARS_PER_TOKEN = 4;
 
@@ -34,7 +34,7 @@ export class OpenAICompatibleProvider implements Provider {
     });
     if (!response.ok || !response.body) {
       // Status only: upstream bodies can echo request content.
-      throw new Error(`upstream returned ${response.status}`);
+      throw new UpstreamStatusError(response.status);
     }
 
     let usage: Usage | null = null;

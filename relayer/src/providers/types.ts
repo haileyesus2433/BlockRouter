@@ -54,6 +54,14 @@ export type Chunk =
   | { type: "tool_call"; delta: ToolCallDelta }
   | { type: "usage"; usage: Usage };
 
+/** An upstream answered with an error status. Carries the status only: bodies can echo requests. */
+export class UpstreamStatusError extends Error {
+  constructor(readonly status: number) {
+    super(`upstream returned ${status}`);
+    this.name = "UpstreamStatusError";
+  }
+}
+
 export interface Provider {
   id: string;
   /** Yields content and tool-call deltas, then exactly one usage chunk last. */
