@@ -50,6 +50,7 @@ type Deployment = {
   usdcMint: string;
   mockUsdtMint: string | null;
   relayer: string | null;
+  relayerUrl: string | null;
   config: { feeBps: number; disputeWindowSecs: number; priceTimelockSecs: number };
   models: { id: number; alias: string; promptRate: number; completionRate: number }[];
 };

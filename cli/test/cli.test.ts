@@ -21,7 +21,7 @@ function br(args: string[], env: Record<string, string> = {}) {
 test("--help works from any directory without a wallet", () => {
   const result = br(["--help"]);
   assert.equal(result.status, 0, result.stderr);
-  for (const text of ["Usage: br", "--cluster", "--url", "--keypair", "wallet", "vault", "session"]) {
+  for (const text of ["Usage: br", "--cluster", "--url", "--keypair", "wallet", "vault", "session", "key"]) {
     assert.ok(result.stdout.includes(text), text);
   }
 });

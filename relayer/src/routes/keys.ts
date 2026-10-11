@@ -1,4 +1,5 @@
 import { type Address, address, isAddress } from "@solana/kit";
+import { WALLET_AUTH_HEADERS } from "@blockrouter/client";
 import { Hono } from "hono";
 
 import { generateKey, hashKey, verifyWalletRequest } from "../auth";
@@ -15,9 +16,9 @@ export function keyRoutes(deps: Deps) {
   routes.use("*", async (c, next) => {
     const wallet = await verifyWalletRequest(
       {
-        address: c.req.header("X-BlockRouter-Address"),
-        signature: c.req.header("X-BlockRouter-Signature"),
-        timestamp: c.req.header("X-BlockRouter-Timestamp"),
+        address: c.req.header(WALLET_AUTH_HEADERS.address),
+        signature: c.req.header(WALLET_AUTH_HEADERS.signature),
+        timestamp: c.req.header(WALLET_AUTH_HEADERS.timestamp),
       },
       c.req.method,
       new URL(c.req.url).pathname,

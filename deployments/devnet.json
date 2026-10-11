@@ -4,6 +4,7 @@
   "usdcMint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
   "mockUsdtMint": null,
   "relayer": null,
+  "relayerUrl": null,
   "config": {
     "feeBps": 250,
     "disputeWindowSecs": 86400,

@@ -10,11 +10,15 @@ import {
   verifySignature,
 } from "@solana/kit";
 
+import { walletAuthMessage } from "@blockrouter/client";
+
 import { ApiError } from "./errors";
 import type { ApiKeyRecord, Store } from "./store";
 
 export const MAX_CLOCK_SKEW_SECS = 300;
 const KEY_PREFIX = "brk_live_";
+
+export { walletAuthMessage };
 
 const unauthorized = (code: string, message: string) => new ApiError(401, "authentication_error", code, message);
 
@@ -27,17 +31,6 @@ export function generateKey(): { id: string; key: string } {
     id: `key_${randomBytes(8).toString("hex")}`,
     key: `${KEY_PREFIX}${randomBytes(32).toString("base64url")}`,
   };
-}
-
-/** The exact message a wallet signs to call the key endpoints. */
-export function walletAuthMessage(wallet: string, method: string, path: string, timestamp: number): string {
-  return [
-    "BlockRouter API request",
-    `Address: ${wallet}`,
-    `Method: ${method.toUpperCase()}`,
-    `Path: ${path}`,
-    `Timestamp: ${timestamp}`,
-  ].join("\n");
 }
 
 // Sign-In With Solana style: the wallet signs method, path, and a fresh timestamp.
