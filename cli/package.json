@@ -8,6 +8,7 @@
   },
   "scripts": {
     "br": "node bin/br.js",
+    "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc -p ."
   },
   "dependencies": {

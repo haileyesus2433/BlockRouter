@@ -23,14 +23,14 @@ program
   .command("wallet")
   .description("show the loaded wallet, its SOL balance, and the cluster")
   .action(async () => {
-    const { client, deployment, keypairPath, rpcUrl } = await createContext(
+    const { client, deployment, keypairPath, rpc } = await createContext(
       program.opts<GlobalOptions>(),
     );
     const { value } = await client.rpc.getBalance(client.payer.address).send();
     console.log(`wallet:  ${client.payer.address}`);
     console.log(`keypair: ${keypairPath}`);
     console.log(`balance: ${formatSol(value)} SOL`);
-    console.log(`cluster: ${deployment.cluster} (${rpcUrl})`);
+    console.log(`cluster: ${deployment.cluster} (${rpc})`);
     console.log(`program: ${deployment.programId}`);
   });
 

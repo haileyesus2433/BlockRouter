@@ -1,13 +1,12 @@
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { resolve } from "node:path";
 import { createClient } from "@solana/kit";
 import { solanaRpc } from "@solana/kit-plugin-rpc";
-import { signerFromFile } from "@solana/kit-plugin-signer";
+import { signer } from "@solana/kit-plugin-signer";
 import { tokenProgram } from "@solana-program/token";
 import { BLOCKROUTER_PROGRAM_ADDRESS, blockrouterProgram } from "@blockrouter/client";
 
 import { type Cluster, defaultRpcUrl, loadDeployment } from "./deployment";
+import { describeRpc, validateRpcUrl } from "./rpc";
+import { loadWallet, walletPath } from "./wallet";
 
 export type GlobalOptions = {
   cluster: Cluster;
@@ -15,31 +14,22 @@ export type GlobalOptions = {
   keypair?: string;
 };
 
-export function resolveKeypairPath(path: string | undefined): string {
-  const raw = path ?? process.env.BR_KEYPAIR ?? "~/.config/solana/id.json";
-  return resolve(raw.startsWith("~/") ? `${homedir()}${raw.slice(1)}` : raw);
-}
-
 export async function createContext(options: GlobalOptions) {
-  const keypairPath = resolveKeypairPath(options.keypair);
-  if (!existsSync(keypairPath)) {
-    throw new Error(
-      `keypair not found at ${keypairPath}. Pass --keypair <path> or set BR_KEYPAIR.`,
-    );
-  }
+  const keypairPath = walletPath(options.keypair);
+  const wallet = await loadWallet(keypairPath);
   const deployment = loadDeployment(options.cluster);
   if (deployment.programId !== BLOCKROUTER_PROGRAM_ADDRESS) {
     throw new Error(
       `deployment program ${deployment.programId} does not match client ${BLOCKROUTER_PROGRAM_ADDRESS}`,
     );
   }
-  const rpcUrl = options.url ?? defaultRpcUrl(options.cluster);
-  const client = await createClient()
-    .use(signerFromFile(keypairPath))
+  const rpcUrl = validateRpcUrl(options.url ?? defaultRpcUrl(options.cluster));
+  const client = createClient()
+    .use(signer(wallet))
     .use(solanaRpc({ rpcUrl }))
     .use(tokenProgram())
     .use(blockrouterProgram());
-  return { client, deployment, keypairPath, rpcUrl };
+  return { client, deployment, keypairPath, rpc: describeRpc(rpcUrl, options.url !== undefined) };
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;
