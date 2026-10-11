@@ -28,6 +28,7 @@ The relayer keypair (`RELAYER_KEYPAIR`) signs settlements only. Sessions must be
 | `GET /v1/models` | none | registered models with raw on-chain rates |
 | `POST /v1/keys` | wallet signature | create a key bound to one session; plaintext returned once |
 | `GET /v1/keys` | wallet signature | list your keys |
+| `PATCH /v1/keys/:id` | wallet signature | set `max_tokens`, the default when a request omits it |
 | `DELETE /v1/keys/:id` | wallet signature | revoke immediately |
 | `POST /v1/chat/completions` | `Bearer brk_live_...` | OpenAI chat, `stream: true` for SSE |
 | `GET /v1/session/current` | `Bearer` | cap, pending usage, remaining, expiry |

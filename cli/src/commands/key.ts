@@ -6,7 +6,25 @@ import { createContext, type GlobalOptions } from "../context";
 import { loadMint } from "../mint";
 import { relayerRequest, relayerUrl } from "../relayer";
 
-type KeyRecord = { id: string; name: string; session: string; created_at: number; revoked_at: number | null };
+type KeyRecord = {
+  id: string;
+  name: string;
+  session: string;
+  created_at: number;
+  revoked_at: number | null;
+  max_tokens: number | null;
+};
+
+const MAX_TOKENS_LIMIT = 200_000;
+
+function parseMaxTokens(value: string): number | null {
+  if (value === "default") return null;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_TOKENS_LIMIT) {
+    throw new Error(`--max-tokens must be an integer from 1 to ${MAX_TOKENS_LIMIT}, or "default"`);
+  }
+  return n;
+}
 
 async function setup(program: Command, options: { relayerUrl?: string }) {
   const ctx = await createContext(program.opts<GlobalOptions>());
@@ -27,8 +45,13 @@ export function registerKeyCommands(program: Command) {
     .requiredOption("--name <name>", "label for the key, e.g. opencode")
     .option("--session <id|address>", "session id or address (default: your newest open session)")
     .option("-m, --mint <mint>", "usdt, usdc, or a mint address (used to find the session)", "usdt")
+    .option(
+      "--max-tokens <n>",
+      "response length used when a client does not send max_tokens; raise it for long file writes (relayer default 4096)",
+    )
     .option(...urlOption)
-    .action(async (options: { name: string; session?: string; mint: string; relayerUrl?: string }) => {
+    .action(async (options: { name: string; session?: string; mint: string; maxTokens?: string; relayerUrl?: string }) => {
+      const maxTokens = options.maxTokens === undefined ? null : parseMaxTokens(options.maxTokens);
       const { ctx, url } = await setup(program, options);
       const session = await resolveSession(ctx, options.session, options.mint);
       const created = await relayerRequest<{ id: string; key: string; session: string }>(
@@ -36,9 +59,10 @@ export function registerKeyCommands(program: Command) {
         ctx.client.payer,
         "POST",
         "/v1/keys",
-        { name: options.name, session },
+        { name: options.name, session, ...(maxTokens !== null ? { max_tokens: maxTokens } : {}) },
       );
       console.log(`key created: ${created.id} (${options.name}) for session ${created.session}`);
+      if (maxTokens !== null) console.log(`default max_tokens: ${maxTokens}`);
       console.log("");
       console.log(`  ${created.key}`);
       console.log("");
@@ -61,8 +85,22 @@ export function registerKeyCommands(program: Command) {
       }
       for (const record of data) {
         const status = record.revoked_at === null ? "active" : `revoked ${date(record.revoked_at)}`;
-        console.log(`${record.id}  ${record.name.padEnd(16)} ${status.padEnd(28)} session ${record.session}`);
+        const limit = `max_tokens ${record.max_tokens ?? "default"}`;
+        console.log(`${record.id}  ${record.name.padEnd(16)} ${status.padEnd(28)} ${limit.padEnd(18)} session ${record.session}`);
       }
+    });
+
+  key
+    .command("update")
+    .description("change a key's default max_tokens")
+    .argument("<id>", "key id from `br key list`")
+    .requiredOption("--max-tokens <n>", 'new default, or "default" to use the relayer default')
+    .option(...urlOption)
+    .action(async (id: string, options: { maxTokens: string; relayerUrl?: string }) => {
+      const maxTokens = parseMaxTokens(options.maxTokens);
+      const { ctx, url } = await setup(program, options);
+      await relayerRequest(url, ctx.client.payer, "PATCH", `/v1/keys/${encodeURIComponent(id)}`, { max_tokens: maxTokens });
+      console.log(`${id}: default max_tokens ${maxTokens ?? "reset to the relayer default"}`);
     });
 
   key

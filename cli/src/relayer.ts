@@ -35,7 +35,7 @@ export async function signedHeaders(
 export async function relayerRequest<T>(
   baseUrl: string,
   signer: KeyPairSigner,
-  method: "GET" | "POST" | "DELETE",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<T> {

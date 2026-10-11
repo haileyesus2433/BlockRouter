@@ -59,3 +59,13 @@ test("malformed RPC URLs and unknown clusters are rejected", () => {
   assert.equal(cluster.status, 1);
   assert.match(cluster.stderr, /testnet/);
 });
+
+test("--max-tokens is validated before touching the wallet or the network", () => {
+  for (const value of ["0", "-1", "1.5", "abc", "200001"]) {
+    const update = br(["key", "update", "key_x", "--max-tokens", value]);
+    assert.equal(update.status, 1, value);
+    assert.match(update.stderr, /--max-tokens must be an integer/);
+    const create = br(["key", "create", "--name", "x", "--max-tokens", value]);
+    assert.match(create.stderr, /--max-tokens must be an integer/);
+  }
+});

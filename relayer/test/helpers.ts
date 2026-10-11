@@ -172,7 +172,7 @@ export function openSession(chain: FakeChain, owner: Address, overrides: Partial
 }
 
 /** Inserts a key straight into the store and returns its plaintext. */
-export function issueKey(deps: Deps, session: SessionState): string {
+export function issueKey(deps: Deps, session: SessionState, defaultMaxTokens: number | null = null): string {
   const { id, key } = generateKey();
   deps.store.insertKey({
     id,
@@ -182,6 +182,7 @@ export function issueKey(deps: Deps, session: SessionState): string {
     ownerPubkey: session.beneficiary,
     createdAt: NOW_SECS,
     revokedAt: null,
+    defaultMaxTokens,
   });
   return key;
 }

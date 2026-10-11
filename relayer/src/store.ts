@@ -8,6 +8,8 @@ export type ApiKeyRecord = {
   ownerPubkey: string;
   createdAt: number;
   revokedAt: number | null;
+  /** Used when a request omits max_tokens; null means the relayer default. */
+  defaultMaxTokens: number | null;
 };
 
 export type UsageRecord = {
@@ -34,6 +36,7 @@ function toKey(row: Row): ApiKeyRecord {
     ownerPubkey: String(row.owner_pubkey),
     createdAt: Number(row.created_at),
     revokedAt: row.revoked_at === null ? null : Number(row.revoked_at),
+    defaultMaxTokens: row.default_max_tokens === null || row.default_max_tokens === undefined ? null : Number(row.default_max_tokens),
   };
 }
 
@@ -67,7 +70,8 @@ export class Store {
         session_pubkey TEXT NOT NULL,
         owner_pubkey TEXT NOT NULL,
         created_at INTEGER NOT NULL,
-        revoked_at INTEGER
+        revoked_at INTEGER,
+        default_max_tokens INTEGER
       );
       CREATE INDEX IF NOT EXISTS api_keys_owner ON api_keys (owner_pubkey);
       CREATE TABLE IF NOT EXISTS usage (
@@ -83,15 +87,30 @@ export class Store {
         last_error TEXT
       );
     `);
+    this.migrate();
+  }
+
+  private migrate(): void {
+    const columns = (this.db.prepare("PRAGMA table_info(api_keys)").all() as Row[]).map((row) => String(row.name));
+    if (!columns.includes("default_max_tokens")) {
+      this.db.exec("ALTER TABLE api_keys ADD COLUMN default_max_tokens INTEGER");
+    }
   }
 
   insertKey(key: ApiKeyRecord): void {
     this.db
       .prepare(
-        `INSERT INTO api_keys (id, name, hash, session_pubkey, owner_pubkey, created_at, revoked_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+        `INSERT INTO api_keys (id, name, hash, session_pubkey, owner_pubkey, created_at, revoked_at, default_max_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
       )
-      .run(key.id, key.name, key.hash, key.sessionPubkey, key.ownerPubkey, key.createdAt);
+      .run(key.id, key.name, key.hash, key.sessionPubkey, key.ownerPubkey, key.createdAt, key.defaultMaxTokens);
+  }
+
+  setDefaultMaxTokens(id: string, owner: string, maxTokens: number | null): boolean {
+    const result = this.db
+      .prepare("UPDATE api_keys SET default_max_tokens = ? WHERE id = ? AND owner_pubkey = ? AND revoked_at IS NULL")
+      .run(maxTokens, id, owner);
+    return Number(result.changes) > 0;
   }
 
   findKeyByHash(hash: string): ApiKeyRecord | null {

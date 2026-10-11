@@ -185,7 +185,7 @@ export function chatRoutes(deps: Deps) {
     const request: ChatRequest = {
       model: active.alias.upstream,
       messages: body.messages,
-      maxTokens: body.maxTokens ?? DEFAULT_MAX_TOKENS,
+      maxTokens: body.maxTokens ?? key.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
       tools: body.tools,
       toolChoice: body.toolChoice,
       options: body.options,

@@ -39,7 +39,16 @@ br vault status                             # balance, reserved, available
 br session open --cap 5 --model deepseek-v3 [--hours 24 | --minutes 30] [--relayer <address>]
 br session status                           # open sessions on your vault
 br session reclaim [id]                     # release expired, unsettled sessions
+
+br key create --name opencode [--session <id|address>] [--max-tokens 16000]
+br key list
+br key update <id> --max-tokens 32000       # or "default"
+br key revoke <id>
 ```
+
+`--max-tokens` is the response length the relayer uses when a client does not send `max_tokens`
+(OpenCode does not). Raise it if long file writes get cut off. It is still clamped to what the
+session can afford.
 
 Amounts are whole tokens (`2.5` means 2.5 USDT). `--mint` defaults to the cluster's mock USDT.
 Program errors are decoded, for example `Session has not expired yet (program error 6015)`.
