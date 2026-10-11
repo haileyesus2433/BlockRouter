@@ -1,1 +1,9 @@
 !.env.example
+
+# Local usage database
+*.db
+*.db-shm
+*.db-wal
+
+# Operator provider config; may be edited with real values by mistake
+providers.json

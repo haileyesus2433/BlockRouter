@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { type Address, address, getBase64Encoder } from "@solana/kit";
+import { type Address, address, type Base58EncodedBytes, getBase58Decoder, getBase64Encoder } from "@solana/kit";
 import {
   BLOCKROUTER_PROGRAM_ADDRESS,
   fetchMaybeModel,
@@ -7,9 +7,11 @@ import {
   findModelPda,
   findSessionPda,
   findVaultPda,
+  getOpenSessionInstructionAsync,
   getSessionDecoder,
-  getSessionSize,
+  SESSION_DISCRIMINATOR,
   type Session,
+  withModelAccounts,
 } from "@blockrouter/client";
 
 import { parseAmount } from "../amount";
@@ -58,15 +60,24 @@ function parseDuration(options: OpenOptions): number {
   return secs;
 }
 
-function resolveModel(ctx: Context, input: string) {
-  const model = ctx.deployment.models.find(
-    (entry) => entry.alias === input || String(entry.id) === input,
-  );
-  if (!model) {
-    const known = ctx.deployment.models.map((entry) => `${entry.alias} (${entry.id})`).join(", ");
-    throw new Error(`unknown model "${input}". Known models: ${known}`);
-  }
-  return model;
+const MAX_SESSION_MODELS = 8;
+
+/** Parses a comma-separated list of model aliases or ids. */
+function resolveModels(ctx: Context, input: string) {
+  const names = input.split(",").map((name) => name.trim()).filter(Boolean);
+  if (names.length === 0) throw new Error("--model needs at least one model");
+  if (names.length > MAX_SESSION_MODELS) throw new Error(`a session can allow at most ${MAX_SESSION_MODELS} models`);
+  const models = names.map((name) => {
+    const model = ctx.deployment.models.find((entry) => entry.alias === name || String(entry.id) === name);
+    if (!model) {
+      const known = ctx.deployment.models.map((entry) => `${entry.alias} (${entry.id})`).join(", ");
+      throw new Error(`unknown model "${name}". Known models: ${known}`);
+    }
+    return model;
+  });
+  const ids = models.map((model) => model.id);
+  if (new Set(ids).size !== ids.length) throw new Error("--model lists the same model twice");
+  return models;
 }
 
 function resolveRelayer(ctx: Context, input: string | undefined): Address {
@@ -82,7 +93,7 @@ async function listSessions(ctx: Context, vault: Address): Promise<{ address: Ad
     .getProgramAccounts(BLOCKROUTER_PROGRAM_ADDRESS, {
       encoding: "base64",
       filters: [
-        { dataSize: BigInt(getSessionSize()) },
+        { memcmp: { offset: 0n, bytes: getBase58Decoder().decode(SESSION_DISCRIMINATOR) as Base58EncodedBytes, encoding: "base58" } },
         { memcmp: { offset: PAYER_ACCOUNT_OFFSET, bytes: vault, encoding: "base58" } },
       ],
     })
@@ -118,9 +129,9 @@ export function registerSessionCommands(program: Command) {
 
   session
     .command("open")
-    .description("reserve part of your vault for a relayer to bill one model")
+    .description("reserve part of your vault for a relayer to bill the models you allow")
     .requiredOption("--cap <amount>", "maximum the relayer can charge, e.g. 5")
-    .requiredOption("--model <model>", "model alias or id the session may be billed for")
+    .requiredOption("--model <models>", "comma-separated model aliases or ids the session may be billed for (max 8)")
     .option("--hours <hours>", "session length in hours (default 24)")
     .option("--minutes <minutes>", "session length in minutes")
     .option("--relayer <address>", "relayer allowed to settle (default: deployment relayer)")
@@ -129,36 +140,38 @@ export function registerSessionCommands(program: Command) {
       const { ctx, mint, vault, state } = await setup(program, options.mint);
       const cap = parseAmount(options.cap, mint.decimals);
       const durationSecs = parseDuration(options);
-      const model = resolveModel(ctx, options.model);
+      const models = resolveModels(ctx, options.model);
       const relayer = resolveRelayer(ctx, options.relayer);
 
       const available = state.balance - state.totalReserved;
       if (cap > available) {
         throw new Error(`only ${show(available, mint)} is available to reserve. Deposit more with \`br vault deposit\`.`);
       }
-      const [modelKey] = await findModelPda({ modelId: model.id });
-      const modelAccount = await fetchMaybeModel(ctx.client.rpc, modelKey);
-      if (!modelAccount.exists || !modelAccount.data.isActive) {
-        throw new Error(`model ${model.alias} is not registered or not active on ${ctx.deployment.cluster}`);
+      for (const model of models) {
+        const [modelKey] = await findModelPda({ modelId: model.id });
+        const modelAccount = await fetchMaybeModel(ctx.client.rpc, modelKey);
+        if (!modelAccount.exists || !modelAccount.data.isActive) {
+          throw new Error(`model ${model.alias} is not registered or not active on ${ctx.deployment.cluster}`);
+        }
       }
 
       const sessionId = state.sessionCounter;
       const [sessionKey] = await findSessionPda({ vault, sessionId });
-      await ctx.client.blockrouter.instructions
-        .openSession({
-          user: ctx.client.payer,
-          vault,
-          model: modelKey,
-          sessionId,
-          reservedAmount: cap,
-          relayer,
-          durationSecs: BigInt(durationSecs),
-        })
-        .sendTransaction();
+      const modelIds = models.map((model) => model.id);
+      const instruction = await getOpenSessionInstructionAsync({
+        user: ctx.client.payer,
+        vault,
+        sessionId,
+        reservedAmount: cap,
+        relayer,
+        durationSecs: BigInt(durationSecs),
+        modelIds,
+      });
+      await ctx.client.sendTransaction([await withModelAccounts(instruction, modelIds)]);
 
       console.log(`session opened: ${sessionKey}`);
       console.log(`id:       ${sessionId}`);
-      console.log(`model:    ${model.alias} (${model.id})`);
+      console.log(`models:   ${models.map((model) => `${model.alias} (${model.id})`).join(", ")}`);
       console.log(`cap:      ${show(cap, mint)}`);
       console.log(`relayer:  ${relayer}`);
       console.log(`expiry:   ${describeExpiry(nowSecs() + BigInt(durationSecs))}`);
@@ -174,10 +187,12 @@ export function registerSessionCommands(program: Command) {
       console.log(`vault:     ${vault}`);
       console.log(`reserved:  ${show(state.totalReserved, mint)} across ${sessions.length} open session(s)`);
       for (const { address: key, data } of sessions) {
-        const model = ctx.deployment.models.find((entry) => entry.id === data.modelId);
+        const names = data.allowedModels.map(
+          (id) => ctx.deployment.models.find((entry) => entry.id === id)?.alias ?? String(id),
+        );
         console.log("");
         console.log(`#${data.sessionId}  ${key}`);
-        console.log(`  model:   ${model ? `${model.alias} (${data.modelId})` : data.modelId}`);
+        console.log(`  models:  ${names.join(", ")}`);
         console.log(`  cap:     ${show(data.reservedAmount, mint)}`);
         console.log(`  relayer: ${data.relayer}`);
         console.log(`  ${describeExpiry(data.expiresAt)}`);

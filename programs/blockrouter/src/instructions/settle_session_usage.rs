@@ -8,11 +8,19 @@ use anchor_spl::{
 };
 
 use crate::{
-    constants::{CONFIG_SEED, MODEL_SEED, SESSION_SEED, VAULT_SEED},
+    constants::{CONFIG_SEED, MAX_ALLOWED_MODELS, SESSION_SEED, VAULT_SEED},
     errors::BlockRouterError,
-    state::{Config, Model, PayerKind, Session, Vault},
-    utils::calculate_charge,
+    state::{Config, PayerKind, Session, Vault},
+    utils::{calculate_charge, load_model},
 };
+
+/// Raw token counts for one model. The program prices them; the relayer never sends an amount.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ModelUsage {
+    pub model_id: u16,
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+}
 
 #[derive(Accounts)]
 pub struct SettleSessionUsage<'info> {
@@ -38,8 +46,6 @@ pub struct SettleSessionUsage<'info> {
         bump = session.bump
     )]
     pub session: Account<'info, Session>,
-    #[account(seeds = [MODEL_SEED, &model.model_id.to_le_bytes()], bump = model.bump)]
-    pub model: Account<'info, Model>,
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Account<'info, Config>,
     #[account(mut)]
@@ -56,10 +62,10 @@ pub struct SettleSessionUsage<'info> {
     pub beneficiary: UncheckedAccount<'info>,
 }
 
-pub fn handle_settle_session_usage(
-    ctx: Context<SettleSessionUsage>,
-    prompt_tokens: u64,
-    completion_tokens: u64,
+// Remaining accounts: one Model PDA per usage line, in the same order.
+pub fn handle_settle_session_usage<'info>(
+    ctx: Context<'info, SettleSessionUsage<'info>>,
+    usage: Vec<ModelUsage>,
 ) -> Result<()> {
     let session = &ctx.accounts.session;
     require_keys_eq!(
@@ -73,22 +79,47 @@ pub fn handle_settle_session_usage(
     );
     let now = Clock::get()?.unix_timestamp;
     require!(now <= session.expires_at, BlockRouterError::SessionExpired);
-    require_eq!(
-        ctx.accounts.model.model_id,
-        session.model_id,
-        BlockRouterError::SessionModelMismatch
+    require!(
+        usage.len() <= MAX_ALLOWED_MODELS,
+        BlockRouterError::TooManyModels
     );
     require!(
-        ctx.accounts.model.is_active,
-        BlockRouterError::ModelInactive
+        ctx.remaining_accounts.len() == usage.len(),
+        BlockRouterError::ModelNotFound
     );
-    let (prompt_rate, completion_rate) = ctx.accounts.model.effective_rates(now);
-    let charge = calculate_charge(
-        prompt_tokens,
-        completion_tokens,
-        prompt_rate,
-        completion_rate,
-    )?;
+    let mut charge: u64 = 0;
+    let mut prompt_tokens: u64 = 0;
+    let mut completion_tokens: u64 = 0;
+    for (index, (line, info)) in usage.iter().zip(ctx.remaining_accounts).enumerate() {
+        require!(
+            !usage[..index]
+                .iter()
+                .any(|seen| seen.model_id == line.model_id),
+            BlockRouterError::DuplicateModel
+        );
+        require!(
+            session.allowed_models.contains(&line.model_id),
+            BlockRouterError::SessionModelMismatch
+        );
+        let model = load_model(info, line.model_id, ctx.program_id)?;
+        require!(model.is_active, BlockRouterError::ModelInactive);
+        let (prompt_rate, completion_rate) = model.effective_rates(now);
+        let line_charge = calculate_charge(
+            line.prompt_tokens,
+            line.completion_tokens,
+            prompt_rate,
+            completion_rate,
+        )?;
+        charge = charge
+            .checked_add(line_charge)
+            .ok_or(BlockRouterError::MathOverflow)?;
+        prompt_tokens = prompt_tokens
+            .checked_add(line.prompt_tokens)
+            .ok_or(BlockRouterError::MathOverflow)?;
+        completion_tokens = completion_tokens
+            .checked_add(line.completion_tokens)
+            .ok_or(BlockRouterError::MathOverflow)?;
+    }
     require!(
         charge <= session.reserved_amount,
         BlockRouterError::ChargeExceedsReservation
@@ -159,7 +190,7 @@ pub fn handle_settle_session_usage(
         charge,
         prompt_tokens,
         completion_tokens,
-        model_id: session.model_id,
+        usage,
         unused_released,
     });
     Ok(())
@@ -173,6 +204,7 @@ pub struct UsageSettled {
     pub charge: u64,
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
-    pub model_id: u16,
+    /// Per-model raw token counts that produced the charge.
+    pub usage: Vec<ModelUsage>,
     pub unused_released: u64,
 }

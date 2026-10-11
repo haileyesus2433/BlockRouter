@@ -13,12 +13,13 @@ declare_id!("7maTNWbtCpuCXeRUVCNDR2a9YU7kaeUqtvrqz4ustyyi");
 pub mod blockrouter {
     use super::*;
 
-    pub fn open_session(
-        ctx: Context<OpenSession>,
+    pub fn open_session<'info>(
+        ctx: Context<'info, OpenSession<'info>>,
         session_id: u64,
         reserved_amount: u64,
         relayer: Pubkey,
         duration_secs: i64,
+        model_ids: Vec<u16>,
     ) -> Result<()> {
         instructions::open_session::handler(
             ctx,
@@ -26,6 +27,7 @@ pub mod blockrouter {
             reserved_amount,
             relayer,
             duration_secs,
+            model_ids,
         )
     }
 
@@ -33,16 +35,11 @@ pub mod blockrouter {
         instructions::reclaim_expired_session::handle_reclaim_expired_session(ctx)
     }
 
-    pub fn settle_session_usage(
-        ctx: Context<SettleSessionUsage>,
-        prompt_tokens: u64,
-        completion_tokens: u64,
+    pub fn settle_session_usage<'info>(
+        ctx: Context<'info, SettleSessionUsage<'info>>,
+        usage: Vec<ModelUsage>,
     ) -> Result<()> {
-        instructions::settle_session_usage::handle_settle_session_usage(
-            ctx,
-            prompt_tokens,
-            completion_tokens,
-        )
+        instructions::settle_session_usage::handle_settle_session_usage(ctx, usage)
     }
 
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {

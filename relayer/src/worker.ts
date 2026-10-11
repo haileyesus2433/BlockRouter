@@ -1,15 +1,15 @@
-import type { Chain, SessionState } from "./chain/types";
+import type { Chain, ModelState, SessionState, UsageLine } from "./chain/types";
 import type { Config } from "./config";
 import { type Ledger, worstCaseRates } from "./ledger";
-import { charge } from "./pricing";
+import { charge, type Rates } from "./pricing";
 import type { Redactor } from "./redact";
-import type { Store, UsageRecord } from "./store";
+import type { ModelUsageRecord, Store, UsageRecord } from "./store";
 
 const BPS = 10_000n;
 const RATE_DENOMINATOR = 1_000_000n;
 
 export type SettleOutcome =
-  | { status: "settled"; signature: string; promptTokens: bigint; completionTokens: bigint }
+  | { status: "settled"; signature: string; lines: UsageLine[] }
   | { status: "unbillable"; reason: string }
   | { status: "waiting" | "skipped" }
   | { status: "failed"; error: string };
@@ -57,7 +57,7 @@ export class SettlementWorker {
 
   private trigger(usage: UsageRecord, session: SessionState, pending: bigint, now: bigint): Trigger | null {
     const { config } = this.deps;
-    if (session.expiresAt - now <= BigInt(config.settleBeforeExpirySecs)) return "expiry";
+    if (session.expiresAt - now <= expiryWindow(config, session, usage)) return "expiry";
     if (usage.closeRequested) return "close";
     if (pending * BPS >= session.reservedAmount * BigInt(config.settleThresholdBps)) return "threshold";
     if (config.settleIntervalSecs > 0 && this.deps.nowSecs() - usage.firstUsageAt >= config.settleIntervalSecs) {
@@ -69,7 +69,7 @@ export class SettlementWorker {
   private async process(usage: UsageRecord): Promise<SettleOutcome> {
     const { chain, store, ledger } = this.deps;
     const key = usage.sessionPubkey;
-    const hasUsage = usage.promptTokens > 0n || usage.completionTokens > 0n;
+    const hasUsage = usage.models.some((line) => line.promptTokens > 0n || line.completionTokens > 0n);
     if (!hasUsage && !usage.closeRequested) return { status: "skipped" };
 
     const session = await chain.getSession(key as SessionState["address"]);
@@ -80,10 +80,9 @@ export class SettlementWorker {
     if (session.expiresAt < now) {
       return this.unbillable(key, "session expired before settlement; the user can reclaim it");
     }
-    const model = await chain.getModel(session.modelId);
-    if (!model) return { status: "failed", error: `model ${session.modelId} not found` };
-
-    const pending = ledger.pendingCharge(usage, model);
+    const models = await ledger.fetchModels(usage.models.map((line) => line.modelId));
+    const priceable = { ...usage, models: usage.models.filter((line) => models.has(line.modelId)) };
+    const pending = ledger.pendingCharge(priceable, models);
     const trigger = this.trigger(usage, session, pending, now);
     if (!trigger) return { status: "skipped" };
 
@@ -92,9 +91,21 @@ export class SettlementWorker {
     if (ledger.held(key) > 0n && trigger !== "expiry") return { status: "waiting" };
 
     const final = store.getUsage(key) ?? usage;
-    const { promptTokens, completionTokens } = fitToReservation(final, session, model);
+    const finalModels = await ledger.fetchModels(final.models.map((line) => line.modelId));
+    const unbillableLines = final.models.filter((line) => !finalModels.get(line.modelId)?.isActive);
+    if (unbillableLines.length > 0) {
+      // The program rejects inactive or removed models; settle the rest rather than nothing.
+      console.error(
+        JSON.stringify({ event: "lines_dropped", session: key, model_ids: unbillableLines.map((line) => line.modelId) }),
+      );
+    }
+    const lines = fitToReservation(
+      final.models.filter((line) => finalModels.get(line.modelId)?.isActive),
+      session.reservedAmount,
+      finalModels,
+    );
     try {
-      const signature = await chain.settle({ session, promptTokens, completionTokens });
+      const signature = await chain.settle({ session, lines });
       store.markSettled(key, signature, this.deps.nowSecs());
       ledger.endSettle(key);
       console.log(
@@ -103,11 +114,14 @@ export class SettlementWorker {
           session: key,
           trigger,
           signature,
-          prompt_tokens: promptTokens.toString(),
-          completion_tokens: completionTokens.toString(),
+          lines: lines.map((line) => ({
+            model_id: line.modelId,
+            prompt_tokens: line.promptTokens.toString(),
+            completion_tokens: line.completionTokens.toString(),
+          })),
         }),
       );
-      return { status: "settled", signature, promptTokens, completionTokens };
+      return { status: "settled", signature, lines };
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error);
       const message = this.deps.redact ? this.deps.redact(raw) : raw;
@@ -126,23 +140,51 @@ export class SettlementWorker {
 }
 
 // The program rejects a charge above the reservation, which would leave the session unbillable.
-// If usage overran (the provider counted more prompt tokens than estimated), bill the most that
-// fits and absorb the rest. Never more than was used.
+// If usage overran (the provider counted more prompt tokens than estimated), bill lines in order
+// until the reservation is used up and absorb the rest. Never more than was used.
 export function fitToReservation(
-  usage: UsageRecord,
-  session: SessionState,
-  model: Parameters<typeof worstCaseRates>[0],
+  lines: ModelUsageRecord[],
+  reservedAmount: bigint,
+  models: Map<number, ModelState>,
+): UsageLine[] {
+  let budget = reservedAmount;
+  const fitted: UsageLine[] = [];
+  for (const line of lines) {
+    const model = models.get(line.modelId);
+    if (!model) continue;
+    const rates = worstCaseRates(model);
+    const fit = fitLine(line.promptTokens, line.completionTokens, rates, budget);
+    budget -= charge(fit.promptTokens, fit.completionTokens, rates);
+    fitted.push({ modelId: line.modelId, ...fit });
+  }
+  return fitted;
+}
+
+function fitLine(
+  promptTokens: bigint,
+  completionTokens: bigint,
+  rates: Rates,
+  budget: bigint,
 ): { promptTokens: bigint; completionTokens: bigint } {
-  const rates = worstCaseRates(model);
-  const { promptTokens, completionTokens } = usage;
-  if (charge(promptTokens, completionTokens, rates) <= session.reservedAmount) {
-    return { promptTokens, completionTokens };
-  }
-  const budget = (session.reservedAmount + 1n) * RATE_DENOMINATOR - 1n;
+  if (charge(promptTokens, completionTokens, rates) <= budget) return { promptTokens, completionTokens };
+  // Largest raw value whose floored charge still fits the budget.
+  const limit = (budget + 1n) * RATE_DENOMINATOR - 1n;
   const promptCost = promptTokens * rates.promptRate;
-  if (promptCost > budget) {
-    return { promptTokens: rates.promptRate === 0n ? promptTokens : budget / rates.promptRate, completionTokens: 0n };
+  if (promptCost > limit) {
+    return { promptTokens: rates.promptRate === 0n ? promptTokens : limit / rates.promptRate, completionTokens: 0n };
   }
-  const fit = rates.completionRate === 0n ? completionTokens : (budget - promptCost) / rates.completionRate;
+  const fit = rates.completionRate === 0n ? completionTokens : (limit - promptCost) / rates.completionRate;
   return { promptTokens, completionTokens: fit < completionTokens ? fit : completionTokens };
+}
+
+// A fixed window would settle short sessions on their first request. Use the configured window,
+// capped at a quarter of the life the session had at first use, but never shorter than it takes
+// the worker to notice and land a settlement.
+export function expiryWindow(config: Config, session: SessionState, usage: UsageRecord): bigint {
+  const floor = BigInt(config.workerTickSecs * 2 + 30);
+  const lifetimeAtFirstUse = session.expiresAt - BigInt(usage.firstUsageAt);
+  const quarter = lifetimeAtFirstUse > 0n ? lifetimeAtFirstUse / 4n : 0n;
+  const window = BigInt(config.settleBeforeExpirySecs);
+  const scaled = quarter < window ? quarter : window;
+  return scaled > floor ? scaled : floor;
 }

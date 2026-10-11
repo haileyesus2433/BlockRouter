@@ -69,8 +69,20 @@ export const modelNotAllowed = (requested: string, allowed: string[]) =>
 export const modelNotFound = (requested: string) =>
   new ApiError(404, "not_found_error", "model_not_found", `model "${requested}" is unknown or inactive. See GET /v1/models`);
 
-export const upstreamError = () =>
-  new ApiError(502, "api_error", "upstream_error", "the upstream provider failed; no charge was recorded for this request");
+const UPSTREAM_HINTS: Record<number, string> = {
+  402: "the upstream account cannot cover this request; a smaller max_tokens may fit (br key update <id> --max-tokens <n>)",
+  429: "the upstream provider is rate limiting; retry shortly",
+};
+
+export const upstreamError = (status?: number) =>
+  new ApiError(
+    502,
+    "api_error",
+    "upstream_error",
+    `the upstream provider failed${status ? ` (${status})` : ""}; no charge was recorded for this request${
+      status && UPSTREAM_HINTS[status] ? `. ${UPSTREAM_HINTS[status]}` : ""
+    }`,
+  );
 
 export const rateLimited = (retryAfterSecs: number) =>
   new ApiError(429, "rate_limit_error", "rate_limit_exceeded", `too many requests. Retry in ${retryAfterSecs}s`);

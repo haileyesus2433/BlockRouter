@@ -17,6 +17,8 @@ import {
   fixEncoderSize,
   getAddressDecoder,
   getAddressEncoder,
+  getArrayDecoder,
+  getArrayEncoder,
   getBytesDecoder,
   getBytesEncoder,
   getI64Decoder,
@@ -32,12 +34,12 @@ import {
   transformEncoder,
   type Account,
   type Address,
+  type Codec,
+  type Decoder,
   type EncodedAccount,
+  type Encoder,
   type FetchAccountConfig,
   type FetchAccountsConfig,
-  type FixedSizeCodec,
-  type FixedSizeDecoder,
-  type FixedSizeEncoder,
   type MaybeAccount,
   type MaybeEncodedAccount,
   type ReadonlyUint8Array,
@@ -69,8 +71,8 @@ export type Session = {
   sessionId: bigint;
   expiresAt: bigint;
   bump: number;
-  /** Model selected by the beneficiary when opening this session. */
-  modelId: number;
+  /** Models the beneficiary allowed this session to be billed for. */
+  allowedModels: Array<number>;
 };
 
 export type SessionArgs = {
@@ -84,12 +86,12 @@ export type SessionArgs = {
   sessionId: number | bigint;
   expiresAt: number | bigint;
   bump: number;
-  /** Model selected by the beneficiary when opening this session. */
-  modelId: number;
+  /** Models the beneficiary allowed this session to be billed for. */
+  allowedModels: Array<number>;
 };
 
 /** Gets the encoder for {@link SessionArgs} account data. */
-export function getSessionEncoder(): FixedSizeEncoder<SessionArgs> {
+export function getSessionEncoder(): Encoder<SessionArgs> {
   return transformEncoder(
     getStructEncoder([
       ["discriminator", fixEncoderSize(getBytesEncoder(), 8)],
@@ -101,14 +103,14 @@ export function getSessionEncoder(): FixedSizeEncoder<SessionArgs> {
       ["sessionId", getU64Encoder()],
       ["expiresAt", getI64Encoder()],
       ["bump", getU8Encoder()],
-      ["modelId", getU16Encoder()],
+      ["allowedModels", getArrayEncoder(getU16Encoder())],
     ]),
     (value) => ({ ...value, discriminator: SESSION_DISCRIMINATOR }),
   );
 }
 
 /** Gets the decoder for {@link Session} account data. */
-export function getSessionDecoder(): FixedSizeDecoder<Session> {
+export function getSessionDecoder(): Decoder<Session> {
   return getStructDecoder([
     ["discriminator", fixDecoderSize(getBytesDecoder(), 8)],
     ["payerAccount", getAddressDecoder()],
@@ -119,12 +121,12 @@ export function getSessionDecoder(): FixedSizeDecoder<Session> {
     ["sessionId", getU64Decoder()],
     ["expiresAt", getI64Decoder()],
     ["bump", getU8Decoder()],
-    ["modelId", getU16Decoder()],
+    ["allowedModels", getArrayDecoder(getU16Decoder())],
   ]);
 }
 
 /** Gets the codec for {@link Session} account data. */
-export function getSessionCodec(): FixedSizeCodec<SessionArgs, Session> {
+export function getSessionCodec(): Codec<SessionArgs, Session> {
   return combineCodec(getSessionEncoder(), getSessionDecoder());
 }
 
@@ -179,8 +181,4 @@ export async function fetchAllMaybeSession(
 ): Promise<MaybeAccount<Session>[]> {
   const maybeAccounts = await fetchEncodedAccounts(rpc, addresses, config);
   return maybeAccounts.map((maybeAccount) => decodeSession(maybeAccount));
-}
-
-export function getSessionSize(): number {
-  return 132;
 }

@@ -60,7 +60,7 @@ test("settlement errors are redacted before they are logged or stored", async ()
   const chain = fakeChain();
   const deps = testDeps({ chain, config: testConfig({ settleThresholdBps: 1 }) });
   const session = openSession(chain, randomAddress());
-  deps.store.addUsage(session.address, 1_000_000, 0, 0, NOW_SECS);
+  deps.store.addUsage(session.address, 1, 1_000_000, 0, 0, NOW_SECS);
   chain.failSettle = new Error(`request to https://rpc.example.com/?api-key=${SECRET} failed`);
   const worker = new SettlementWorker({ ...deps, redact: createRedactor([`https://rpc.example.com/?api-key=${SECRET}`]) });
 
@@ -111,4 +111,33 @@ test("startup failures exit non-zero without revealing secrets", () => {
   assert.notEqual(missingKey.status, 0);
   assert.match(missingKey.stderr, /startup failed/);
   assert.ok(!(missingKey.stdout + missingKey.stderr).includes(SECRET));
+});
+
+test("upstream failures are logged by status code, never by body", async () => {
+  const { UpstreamStatusError } = await import("../src/providers/types");
+  const { issueKey, openSession, randomAddress } = await import("./helpers");
+  const chain = fakeChain();
+  const failing = {
+    id: "failing",
+    countTokens: () => 1,
+    async *chat(): AsyncIterable<never> {
+      throw new UpstreamStatusError(402);
+    },
+  };
+  const deps = testDeps({ chain, provider: failing });
+  const session = openSession(chain, randomAddress());
+  const key = issueKey(deps, session);
+  const logs = await captureConsole(async () => {
+    const response = await createApp(deps).request("/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "deepseek-v3", messages: [{ role: "user", content: SECRET }] }),
+    });
+    assert.equal(response.status, 502);
+    assert.match(((await response.json()) as any).error.message, /\(402\).*br key update/);
+  });
+  const entry = JSON.parse(logs.split("\n").find((line) => line.includes("upstream_error"))!);
+  assert.equal(entry.status, 402);
+  assert.equal(entry.model, "deepseek-v3");
+  assert.ok(!logs.includes(SECRET));
 });

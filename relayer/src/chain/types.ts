@@ -9,7 +9,8 @@ export type SessionState = {
   reservedAmount: bigint;
   sessionId: bigint;
   expiresAt: bigint;
-  modelId: number;
+  /** Models this session may be billed for. */
+  allowedModels: number[];
 };
 
 export type ModelState = {
@@ -22,10 +23,16 @@ export type ModelState = {
   isActive: boolean;
 };
 
-export type SettleInput = {
-  session: SessionState;
+export type UsageLine = {
+  modelId: number;
   promptTokens: bigint;
   completionTokens: bigint;
+};
+
+export type SettleInput = {
+  session: SessionState;
+  /** Raw token counts per model; the program prices each line. */
+  lines: UsageLine[];
 };
 
 export interface Chain {

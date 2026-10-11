@@ -14,8 +14,31 @@ cd relayer && node --env-file=.env --import tsx src/server.ts
 curl http://127.0.0.1:8787/health
 ```
 
-Without `UPSTREAM_BASE_URL` and `UPSTREAM_API_KEY` it serves the deterministic mock provider. See
-`.env.example` for every setting.
+See `.env.example` for every setting.
+
+## Upstream providers
+
+Each model can be served by a different OpenAI-compatible provider. Copy `providers.example.json`
+to `providers.json`, set `PROVIDERS_FILE=providers.json`, and export the key variable each provider
+names:
+
+```json
+{
+  "providers": {
+    "deepseek": { "baseUrl": "https://api.deepseek.com/v1", "apiKeyEnv": "DEEPSEEK_API_KEY" },
+    "openrouter": { "baseUrl": "https://openrouter.ai/api/v1", "apiKeyEnv": "OPENROUTER_API_KEY" }
+  },
+  "models": {
+    "deepseek-v3": { "provider": "deepseek", "upstream": "deepseek-chat" },
+    "llama-3.3-70b": { "provider": "openrouter", "upstream": "meta-llama/llama-3.3-70b-instruct" }
+  }
+}
+```
+
+Keys never go in the file. Every alias must be registered on-chain in the deployment, because that
+is where its price lives; models with no provider are hidden from `/v1/models` and refused. For a
+single provider, `UPSTREAM_BASE_URL`, `UPSTREAM_API_KEY`, and `UPSTREAM_MODELS` still work. With no
+upstream configured, the deterministic mock provider answers every model.
 
 The relayer keypair (`RELAYER_KEYPAIR`) signs settlements only. Sessions must be opened with
 `--relayer <its address>`, which is printed at startup.
@@ -28,12 +51,20 @@ The relayer keypair (`RELAYER_KEYPAIR`) signs settlements only. Sessions must be
 | `GET /v1/models` | none | registered models with raw on-chain rates |
 | `POST /v1/keys` | wallet signature | create a key bound to one session; plaintext returned once |
 | `GET /v1/keys` | wallet signature | list your keys |
+| `PATCH /v1/keys/:id` | wallet signature | set `max_tokens`, the default when a request omits it |
 | `DELETE /v1/keys/:id` | wallet signature | revoke immediately |
 | `POST /v1/chat/completions` | `Bearer brk_live_...` | OpenAI chat, `stream: true` for SSE |
 | `GET /v1/session/current` | `Bearer` | cap, pending usage, remaining, expiry |
 | `POST /v1/session/close` | `Bearer` | settle now and release the unused reservation |
 
 Rates are base units per 1,000,000 tokens, exactly as stored on-chain.
+
+**Tool calling** is passed through end to end, so coding agents can read and edit files: `tools`,
+`tool_choice`, assistant messages with `tool_calls`, and `tool` result messages go to the upstream
+unchanged, and tool calls come back as `message.tool_calls` or streamed `delta.tool_calls` with
+`finish_reason: "tool_calls"`. Tool definitions and arguments count toward the prompt estimate.
+`temperature`, `top_p`, `stop`, `seed`, `presence_penalty`, `frequency_penalty`, `response_format`,
+and `parallel_tool_calls` are forwarded as well.
 
 **Wallet signature.** Key endpoints take `X-BlockRouter-Address`, `X-BlockRouter-Timestamp` (unix
 seconds, within 5 minutes), and `X-BlockRouter-Signature` (base58 Ed25519) over:
@@ -57,7 +88,8 @@ messages: 401 `invalid_api_key` / `key_revoked`, 402 `no_active_session` / `sess
 
 ## Billing
 
-- A key is bound to one session, so a leaked key costs at most that session's cap.
+- A key is bound to one session, so a leaked key costs at most that session's cap. A session allows
+  up to 8 models; requests for any of them draw on the same cap, each at its own rate.
 - Pre-flight clamps `max_tokens` to what the session can still afford, priced at the higher of the
   current and any pending (timelocked) rate. The maximum is held while the request is in flight, so
   concurrent requests cannot overspend.

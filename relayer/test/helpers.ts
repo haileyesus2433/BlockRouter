@@ -30,15 +30,15 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     relayerKeypair: "unused",
     dbPath: ":memory:",
     models: [
-      { id: 1, alias: "deepseek-v3", upstream: "deepseek-chat" },
-      { id: 2, alias: "llama-3.3-70b", upstream: "llama-3.3-70b" },
+      { id: 1, alias: "deepseek-v3", upstream: "deepseek-chat", provider: null, available: true },
+      { id: 2, alias: "llama-3.3-70b", upstream: "llama-3.3-70b", provider: null, available: true },
     ],
     settleThresholdBps: 8_000,
     settleBeforeExpirySecs: 600,
     settleIntervalSecs: 0,
     workerTickSecs: 15,
     rateLimitPerMinute: 1_000,
-    upstream: null,
+    providers: {},
     ...overrides,
   };
 }
@@ -117,6 +117,7 @@ export function testDeps(overrides: Partial<Deps> = {}): Deps {
     config,
     chain,
     provider: new MockProvider(),
+    providers: new Map(),
     store,
     ledger: new Ledger(store, chain, config.models),
     nowSecs: () => NOW_SECS,
@@ -164,7 +165,7 @@ export function openSession(chain: FakeChain, owner: Address, overrides: Partial
     reservedAmount: 5_000_000n,
     sessionId: BigInt(sessionCounter),
     expiresAt: chain.clock.now + 86_400n,
-    modelId: 1,
+    allowedModels: [1],
     ...overrides,
   };
   chain.sessions.set(session.address, session);
@@ -172,7 +173,7 @@ export function openSession(chain: FakeChain, owner: Address, overrides: Partial
 }
 
 /** Inserts a key straight into the store and returns its plaintext. */
-export function issueKey(deps: Deps, session: SessionState): string {
+export function issueKey(deps: Deps, session: SessionState, defaultMaxTokens: number | null = null): string {
   const { id, key } = generateKey();
   deps.store.insertKey({
     id,
@@ -182,6 +183,7 @@ export function issueKey(deps: Deps, session: SessionState): string {
     ownerPubkey: session.beneficiary,
     createdAt: NOW_SECS,
     revokedAt: null,
+    defaultMaxTokens,
   });
   return key;
 }

@@ -10,7 +10,9 @@ import {
   fetchVault,
   findConfigPda,
   findModelPda,
+  getSettleSessionUsageInstructionAsync,
   PayerKind,
+  withModelAccounts,
 } from "@blockrouter/client";
 
 import type { Chain, ModelState, SessionState, SettleInput } from "./types";
@@ -35,7 +37,7 @@ export async function createKitChain(options: { rpcUrl: string; relayerKeypair: 
       reservedAmount: data.reservedAmount,
       sessionId: data.sessionId,
       expiresAt: data.expiresAt,
-      modelId: data.modelId,
+      allowedModels: [...data.allowedModels],
     };
   }
 
@@ -48,7 +50,7 @@ export async function createKitChain(options: { rpcUrl: string; relayerKeypair: 
     return { modelId, promptRate, completionRate, pendingPromptRate, pendingCompletionRate, effectiveAt, isActive };
   }
 
-  async function settle({ session, promptTokens, completionTokens }: SettleInput): Promise<string> {
+  async function settle({ session, lines }: SettleInput): Promise<string> {
     const vault = await fetchVault(rpc, session.vault);
     const config = await fetchConfig(rpc, (await findConfigPda())[0]);
     const mintAccount = await rpc.getAccountInfo(vault.data.mint, { encoding: "base64" }).send();
@@ -60,22 +62,22 @@ export async function createKitChain(options: { rpcUrl: string; relayerKeypair: 
       mint: vault.data.mint,
       tokenProgram,
     });
-    const [model] = await findModelPda({ modelId: session.modelId });
-    const result = await client.blockrouter.instructions
-      .settleSessionUsage({
-        relayer: client.payer,
-        vault: session.vault,
-        vaultAta,
-        session: session.address,
-        model,
-        providerAta,
-        tokenProgram,
-        mint: vault.data.mint,
-        beneficiary: session.beneficiary,
-        promptTokens,
-        completionTokens,
-      })
-      .sendTransaction();
+    const instruction = await getSettleSessionUsageInstructionAsync({
+      relayer: client.payer,
+      vault: session.vault,
+      vaultAta,
+      session: session.address,
+      providerAta,
+      tokenProgram,
+      mint: vault.data.mint,
+      beneficiary: session.beneficiary,
+      usage: lines,
+    });
+    const withModels = await withModelAccounts(
+      instruction,
+      lines.map((line) => line.modelId),
+    );
+    const result = await client.sendTransaction([withModels]);
     return String(result.context.signature);
   }
 

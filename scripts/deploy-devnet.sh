@@ -19,6 +19,7 @@ SO="target/deploy/blockrouter.so"
 IDL="target/idl/blockrouter.json"
 ANCHOR_VERSION="1.2.0"
 SBPF_ARCH="${SBPF_ARCH:-v2}"
+MIN_EXTEND_BYTES=10240
 
 fail() { echo "error: $*" >&2; exit 1; }
 
@@ -50,10 +51,10 @@ echo "cluster:   $URL"
 anchor build --arch "$SBPF_ARCH"
 [ -f "$SO" ] || fail "$SO missing after build"
 
-if solana program show "$declared_id" --url "$URL" >/dev/null 2>&1; then
+if solana program show "$declared_id" --url "$URL" --keypair "$WALLET" >/dev/null 2>&1; then
   mode="upgrade"
   program_arg="$declared_id"
-  current_authority="$(solana program show "$declared_id" --url "$URL" | awk '/^Authority:/{print $2}')"
+  current_authority="$(solana program show "$declared_id" --url "$URL" --keypair "$WALLET" | awk '/^Authority:/{print $2}')"
   [ "$current_authority" = "$authority" ] \
     || fail "upgrade authority is $current_authority, not $authority"
 else
@@ -71,21 +72,38 @@ echo "balance:   $balance_lamports lamports, need about $needed_lamports for $mo
 [ "$balance_lamports" -ge "$needed_lamports" ] \
   || fail "not enough SOL. Fund $authority on devnet (https://faucet.solana.com)"
 
+if [ "$mode" = "upgrade" ]; then
+  current_len="$(solana program show "$declared_id" --url "$URL" --keypair "$WALLET" | awk '/^Data Length:/{print $3}')"
+  if [ "$so_bytes" -gt "$current_len" ]; then
+    # The runtime rejects extensions under 10240 bytes, which the CLI's auto-extend can request.
+    growth=$(( so_bytes - current_len ))
+    [ "$growth" -lt "$MIN_EXTEND_BYTES" ] && growth="$MIN_EXTEND_BYTES"
+    echo "extending program data by $growth bytes"
+    solana program extend "$declared_id" "$growth" --url "$URL" --keypair "$WALLET"
+  fi
+fi
+
 solana program deploy "$SO" \
   --url "$URL" \
   --keypair "$WALLET" \
   --upgrade-authority "$WALLET" \
   --program-id "$program_arg" \
   --max-sign-attempts 20 \
+  --no-auto-extend \
   --use-rpc
 
-if anchor idl fetch "$declared_id" --provider.cluster devnet >/dev/null 2>&1; then
+if anchor idl fetch "$declared_id" --provider.cluster "$URL" >/dev/null 2>&1; then
   anchor idl upgrade "$declared_id" --filepath "$IDL" \
-    --provider.cluster devnet --provider.wallet "$WALLET"
+    --provider.cluster "$URL" --provider.wallet "$WALLET"
 else
   anchor idl init "$declared_id" --filepath "$IDL" \
-    --provider.cluster devnet --provider.wallet "$WALLET"
+    --provider.cluster "$URL" --provider.wallet "$WALLET"
 fi
 
 echo
-echo "deployed ($mode): https://explorer.solana.com/address/$declared_id?cluster=devnet"
+if [ "$URL" = "https://api.devnet.solana.com" ]; then
+  explorer_cluster="cluster=devnet"
+else
+  explorer_cluster="cluster=custom&customUrl=$URL"
+fi
+echo "deployed ($mode): https://explorer.solana.com/address/$declared_id?$explorer_cluster"

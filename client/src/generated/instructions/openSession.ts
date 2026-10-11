@@ -12,12 +12,16 @@ import {
   fixEncoderSize,
   getAddressDecoder,
   getAddressEncoder,
+  getArrayDecoder,
+  getArrayEncoder,
   getBytesDecoder,
   getBytesEncoder,
   getI64Decoder,
   getI64Encoder,
   getStructDecoder,
   getStructEncoder,
+  getU16Decoder,
+  getU16Encoder,
   getU64Decoder,
   getU64Encoder,
   SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
@@ -26,9 +30,9 @@ import {
   type AccountMeta,
   type AccountSignerMeta,
   type Address,
-  type FixedSizeCodec,
-  type FixedSizeDecoder,
-  type FixedSizeEncoder,
+  type Codec,
+  type Decoder,
+  type Encoder,
   type Instruction,
   type InstructionWithAccounts,
   type InstructionWithData,
@@ -68,7 +72,6 @@ export type OpenSessionInstruction<
   TAccountConfig extends string | AccountMeta<string> = string,
   TAccountSystemProgram extends string | AccountMeta<string> =
     "11111111111111111111111111111111",
-  TAccountModel extends string | AccountMeta<string> = string,
   TRemainingAccounts extends readonly AccountMeta<string>[] = [],
 > = Instruction<TProgram> &
   InstructionWithData<ReadonlyUint8Array> &
@@ -89,9 +92,6 @@ export type OpenSessionInstruction<
       TAccountSystemProgram extends string
         ? ReadonlyAccount<TAccountSystemProgram>
         : TAccountSystemProgram,
-      TAccountModel extends string
-        ? ReadonlyAccount<TAccountModel>
-        : TAccountModel,
       ...TRemainingAccounts,
     ]
   >;
@@ -102,6 +102,7 @@ export type OpenSessionInstructionData = {
   reservedAmount: bigint;
   relayer: Address;
   durationSecs: bigint;
+  modelIds: Array<number>;
 };
 
 export type OpenSessionInstructionDataArgs = {
@@ -109,9 +110,10 @@ export type OpenSessionInstructionDataArgs = {
   reservedAmount: number | bigint;
   relayer: Address;
   durationSecs: number | bigint;
+  modelIds: Array<number>;
 };
 
-export function getOpenSessionInstructionDataEncoder(): FixedSizeEncoder<OpenSessionInstructionDataArgs> {
+export function getOpenSessionInstructionDataEncoder(): Encoder<OpenSessionInstructionDataArgs> {
   return transformEncoder(
     getStructEncoder([
       ["discriminator", fixEncoderSize(getBytesEncoder(), 8)],
@@ -119,22 +121,24 @@ export function getOpenSessionInstructionDataEncoder(): FixedSizeEncoder<OpenSes
       ["reservedAmount", getU64Encoder()],
       ["relayer", getAddressEncoder()],
       ["durationSecs", getI64Encoder()],
+      ["modelIds", getArrayEncoder(getU16Encoder())],
     ]),
     (value) => ({ ...value, discriminator: OPEN_SESSION_DISCRIMINATOR }),
   );
 }
 
-export function getOpenSessionInstructionDataDecoder(): FixedSizeDecoder<OpenSessionInstructionData> {
+export function getOpenSessionInstructionDataDecoder(): Decoder<OpenSessionInstructionData> {
   return getStructDecoder([
     ["discriminator", fixDecoderSize(getBytesDecoder(), 8)],
     ["sessionId", getU64Decoder()],
     ["reservedAmount", getU64Decoder()],
     ["relayer", getAddressDecoder()],
     ["durationSecs", getI64Decoder()],
+    ["modelIds", getArrayDecoder(getU16Decoder())],
   ]);
 }
 
-export function getOpenSessionInstructionDataCodec(): FixedSizeCodec<
+export function getOpenSessionInstructionDataCodec(): Codec<
   OpenSessionInstructionDataArgs,
   OpenSessionInstructionData
 > {
@@ -151,18 +155,17 @@ export type OpenSessionAsyncInput<
   TAccountConfig extends InstructionAccountInput = InstructionAccountInput,
   TAccountSystemProgram extends InstructionAccountInput =
     InstructionAccountInput,
-  TAccountModel extends InstructionAccountInput = InstructionAccountInput,
 > = {
   user: TAccountUser;
   vault: TAccountVault;
   session?: TAccountSession;
   config?: TAccountConfig;
   systemProgram?: TAccountSystemProgram;
-  model: TAccountModel;
   sessionId: OpenSessionInstructionDataArgs["sessionId"];
   reservedAmount: OpenSessionInstructionDataArgs["reservedAmount"];
   relayer: OpenSessionInstructionDataArgs["relayer"];
   durationSecs: OpenSessionInstructionDataArgs["durationSecs"];
+  modelIds: OpenSessionInstructionDataArgs["modelIds"];
 };
 
 export async function getOpenSessionInstructionAsync<
@@ -171,7 +174,6 @@ export async function getOpenSessionInstructionAsync<
   TAccountSession extends InstructionAccountInput,
   TAccountConfig extends InstructionAccountInput,
   TAccountSystemProgram extends InstructionAccountInput,
-  TAccountModel extends InstructionAccountInput,
   TProgramAddress extends Address = typeof BLOCKROUTER_PROGRAM_ADDRESS,
 >(
   input: OpenSessionAsyncInput<
@@ -179,8 +181,7 @@ export async function getOpenSessionInstructionAsync<
     TAccountVault,
     TAccountSession,
     TAccountConfig,
-    TAccountSystemProgram,
-    TAccountModel
+    TAccountSystemProgram
   >,
   config?: { programAddress?: TProgramAddress },
 ): Promise<
@@ -205,10 +206,6 @@ export async function getOpenSessionInstructionAsync<
     ResolvedInstructionAccountMeta<
       TAccountSystemProgram,
       InstructionAccountInputAddress<TAccountSystemProgram>
-    >,
-    ResolvedInstructionAccountMeta<
-      TAccountModel,
-      InstructionAccountInputAddress<TAccountModel>
     >
   >
 > {
@@ -233,7 +230,6 @@ export async function getOpenSessionInstructionAsync<
       isSigner: false,
       isWritable: false,
     },
-    model: { value: input.model ?? null, isSigner: false, isWritable: false },
   };
   const accounts = originalAccounts as Record<
     keyof typeof originalAccounts,
@@ -274,7 +270,6 @@ export async function getOpenSessionInstructionAsync<
       getAccountMeta("session", accounts.session),
       getAccountMeta("config", accounts.config),
       getAccountMeta("systemProgram", accounts.systemProgram),
-      getAccountMeta("model", accounts.model),
     ],
     data: getOpenSessionInstructionDataEncoder().encode(
       args as OpenSessionInstructionDataArgs,
@@ -301,10 +296,6 @@ export async function getOpenSessionInstructionAsync<
     ResolvedInstructionAccountMeta<
       TAccountSystemProgram,
       InstructionAccountInputAddress<TAccountSystemProgram>
-    >,
-    ResolvedInstructionAccountMeta<
-      TAccountModel,
-      InstructionAccountInputAddress<TAccountModel>
     >
   >);
 }
@@ -316,18 +307,17 @@ export type OpenSessionInput<
   TAccountConfig extends InstructionAccountInput = InstructionAccountInput,
   TAccountSystemProgram extends InstructionAccountInput =
     InstructionAccountInput,
-  TAccountModel extends InstructionAccountInput = InstructionAccountInput,
 > = {
   user: TAccountUser;
   vault: TAccountVault;
   session: TAccountSession;
   config: TAccountConfig;
   systemProgram?: TAccountSystemProgram;
-  model: TAccountModel;
   sessionId: OpenSessionInstructionDataArgs["sessionId"];
   reservedAmount: OpenSessionInstructionDataArgs["reservedAmount"];
   relayer: OpenSessionInstructionDataArgs["relayer"];
   durationSecs: OpenSessionInstructionDataArgs["durationSecs"];
+  modelIds: OpenSessionInstructionDataArgs["modelIds"];
 };
 
 export function getOpenSessionInstruction<
@@ -336,7 +326,6 @@ export function getOpenSessionInstruction<
   TAccountSession extends InstructionAccountInput,
   TAccountConfig extends InstructionAccountInput,
   TAccountSystemProgram extends InstructionAccountInput,
-  TAccountModel extends InstructionAccountInput,
   TProgramAddress extends Address = typeof BLOCKROUTER_PROGRAM_ADDRESS,
 >(
   input: OpenSessionInput<
@@ -344,8 +333,7 @@ export function getOpenSessionInstruction<
     TAccountVault,
     TAccountSession,
     TAccountConfig,
-    TAccountSystemProgram,
-    TAccountModel
+    TAccountSystemProgram
   >,
   config?: { programAddress?: TProgramAddress },
 ): OpenSessionInstruction<
@@ -369,10 +357,6 @@ export function getOpenSessionInstruction<
   ResolvedInstructionAccountMeta<
     TAccountSystemProgram,
     InstructionAccountInputAddress<TAccountSystemProgram>
-  >,
-  ResolvedInstructionAccountMeta<
-    TAccountModel,
-    InstructionAccountInputAddress<TAccountModel>
   >
 > {
   // Program address.
@@ -396,7 +380,6 @@ export function getOpenSessionInstruction<
       isSigner: false,
       isWritable: false,
     },
-    model: { value: input.model ?? null, isSigner: false, isWritable: false },
   };
   const accounts = originalAccounts as Record<
     keyof typeof originalAccounts,
@@ -419,7 +402,6 @@ export function getOpenSessionInstruction<
       getAccountMeta("session", accounts.session),
       getAccountMeta("config", accounts.config),
       getAccountMeta("systemProgram", accounts.systemProgram),
-      getAccountMeta("model", accounts.model),
     ],
     data: getOpenSessionInstructionDataEncoder().encode(
       args as OpenSessionInstructionDataArgs,
@@ -446,10 +428,6 @@ export function getOpenSessionInstruction<
     ResolvedInstructionAccountMeta<
       TAccountSystemProgram,
       InstructionAccountInputAddress<TAccountSystemProgram>
-    >,
-    ResolvedInstructionAccountMeta<
-      TAccountModel,
-      InstructionAccountInputAddress<TAccountModel>
     >
   >);
 }
@@ -465,7 +443,6 @@ export type ParsedOpenSessionInstruction<
     session: TAccountMetas[2];
     config: TAccountMetas[3];
     systemProgram: TAccountMetas[4];
-    model: TAccountMetas[5];
   };
   data: OpenSessionInstructionData;
 };
@@ -478,12 +455,12 @@ export function parseOpenSessionInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedOpenSessionInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 6) {
+  if (instruction.accounts.length < 5) {
     throw new SolanaError(
       SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
       {
         actualAccountMetas: instruction.accounts.length,
-        expectedAccountMetas: 6,
+        expectedAccountMetas: 5,
       },
     );
   }
@@ -501,7 +478,6 @@ export function parseOpenSessionInstruction<
       session: getNextAccount(),
       config: getNextAccount(),
       systemProgram: getNextAccount(),
-      model: getNextAccount(),
     },
     data: getOpenSessionInstructionDataDecoder().decode(instruction.data),
   };

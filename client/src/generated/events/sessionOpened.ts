@@ -12,6 +12,8 @@ import {
   fixEncoderSize,
   getAddressDecoder,
   getAddressEncoder,
+  getArrayDecoder,
+  getArrayEncoder,
   getBytesEncoder,
   getConstantDecoder,
   getConstantEncoder,
@@ -26,9 +28,9 @@ import {
   getU64Decoder,
   getU64Encoder,
   type Address,
-  type FixedSizeCodec,
-  type FixedSizeDecoder,
-  type FixedSizeEncoder,
+  type Codec,
+  type Decoder,
+  type Encoder,
   type ReadonlyUint8Array,
 } from "@solana/kit";
 
@@ -49,7 +51,7 @@ export type SessionOpenedEvent = {
   relayer: Address;
   reservedAmount: bigint;
   expiresAt: bigint;
-  modelId: number;
+  modelIds: Array<number>;
 };
 
 export type SessionOpenedEventArgs = {
@@ -60,11 +62,11 @@ export type SessionOpenedEventArgs = {
   relayer: Address;
   reservedAmount: number | bigint;
   expiresAt: number | bigint;
-  modelId: number;
+  modelIds: Array<number>;
 };
 
 /** Gets the encoder for {@link SessionOpenedEventArgs} event data. */
-export function getSessionOpenedEventEncoder(): FixedSizeEncoder<SessionOpenedEventArgs> {
+export function getSessionOpenedEventEncoder(): Encoder<SessionOpenedEventArgs> {
   return getHiddenPrefixEncoder(
     getStructEncoder([
       ["session", getAddressEncoder()],
@@ -74,14 +76,14 @@ export function getSessionOpenedEventEncoder(): FixedSizeEncoder<SessionOpenedEv
       ["relayer", getAddressEncoder()],
       ["reservedAmount", getU64Encoder()],
       ["expiresAt", getI64Encoder()],
-      ["modelId", getU16Encoder()],
+      ["modelIds", getArrayEncoder(getU16Encoder())],
     ]),
     [getConstantEncoder(SESSION_OPENED_EVENT_DISCRIMINATOR)],
   );
 }
 
 /** Gets the decoder for {@link SessionOpenedEvent} event data. */
-export function getSessionOpenedEventDecoder(): FixedSizeDecoder<SessionOpenedEvent> {
+export function getSessionOpenedEventDecoder(): Decoder<SessionOpenedEvent> {
   return getHiddenPrefixDecoder(
     getStructDecoder([
       ["session", getAddressDecoder()],
@@ -91,14 +93,14 @@ export function getSessionOpenedEventDecoder(): FixedSizeDecoder<SessionOpenedEv
       ["relayer", getAddressDecoder()],
       ["reservedAmount", getU64Decoder()],
       ["expiresAt", getI64Decoder()],
-      ["modelId", getU16Decoder()],
+      ["modelIds", getArrayDecoder(getU16Decoder())],
     ]),
     [getConstantDecoder(SESSION_OPENED_EVENT_DISCRIMINATOR)],
   );
 }
 
 /** Gets the codec for {@link SessionOpenedEvent} event data. */
-export function getSessionOpenedEventCodec(): FixedSizeCodec<
+export function getSessionOpenedEventCodec(): Codec<
   SessionOpenedEventArgs,
   SessionOpenedEvent
 > {

@@ -1,9 +1,7 @@
 use anchor_lang::prelude::*;
 
-use crate::state::PayerKind;
+use crate::{constants::MAX_ALLOWED_MODELS, state::PayerKind};
 
-// Layout change: legacy 130-byte Sessions require explicit draining or migration
-// before deploying this layout. No default Model binding is safe for legacy Sessions.
 #[account]
 #[derive(InitSpace)]
 pub struct Session {
@@ -17,6 +15,7 @@ pub struct Session {
     pub session_id: u64,
     pub expires_at: i64,
     pub bump: u8,
-    /// Model selected by the beneficiary when opening this session.
-    pub model_id: u16,
+    /// Models the beneficiary allowed this session to be billed for.
+    #[max_len(MAX_ALLOWED_MODELS)]
+    pub allowed_models: Vec<u16>,
 }

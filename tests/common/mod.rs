@@ -1,5 +1,5 @@
 use anchor_lang::{
-    prelude::{Clock, Pubkey},
+    prelude::{AccountMeta, Clock, Pubkey},
     AccountDeserialize, AccountSerialize, AnchorDeserialize, Discriminator, InstructionData,
     ToAccountMetas,
 };
@@ -394,28 +394,51 @@ pub fn funded_vault(env: &mut TestEnv, who: Actor, amount: u64) -> Pubkey {
     vault
 }
 
+/// Appends one read-only Model PDA per id, as the program expects in remaining accounts.
+pub fn with_models(mut metas: Vec<AccountMeta>, model_ids: &[u16]) -> Vec<AccountMeta> {
+    metas.extend(
+        model_ids
+            .iter()
+            .map(|id| AccountMeta::new_readonly(model_pda(*id), false)),
+    );
+    metas
+}
+
 /// Opens the next session on `who`'s vault, bound to the relayer actor.
 /// Requires init_config and funded_vault first.
 pub fn open_session(env: &mut TestEnv, who: Actor, cap: u64, secs: i64, model_id: u16) -> Pubkey {
+    open_session_with_models(env, who, cap, secs, &[model_id])
+}
+
+pub fn open_session_with_models(
+    env: &mut TestEnv,
+    who: Actor,
+    cap: u64,
+    secs: i64,
+    model_ids: &[u16],
+) -> Pubkey {
     let vault = vault_pda(&env.keypair(who).pubkey(), &env.mint);
     let session_id = read::<Vault>(&env.svm, vault).session_counter;
     let session = session_pda(&vault, session_id);
     let instruction = Instruction {
         program_id: address(blockrouter::id()),
-        accounts: blockrouter::accounts::OpenSession {
-            user: env.key(who),
-            vault,
-            session,
-            config: config_pda(),
-            system_program: anchor_lang::solana_program::system_program::ID,
-            model: model_pda(model_id),
-        }
-        .to_account_metas(None),
+        accounts: with_models(
+            blockrouter::accounts::OpenSession {
+                user: env.key(who),
+                vault,
+                session,
+                config: config_pda(),
+                system_program: anchor_lang::solana_program::system_program::ID,
+            }
+            .to_account_metas(None),
+            model_ids,
+        ),
         data: blockrouter::instruction::OpenSession {
             session_id,
             reserved_amount: cap,
             relayer: env.key(Actor::Relayer),
             duration_secs: secs,
+            model_ids: model_ids.to_vec(),
         }
         .data(),
     };

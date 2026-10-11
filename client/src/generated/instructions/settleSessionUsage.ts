@@ -11,22 +11,22 @@ import {
   fixDecoderSize,
   fixEncoderSize,
   getAddressEncoder,
+  getArrayDecoder,
+  getArrayEncoder,
   getBytesDecoder,
   getBytesEncoder,
   getProgramDerivedAddress,
   getStructDecoder,
   getStructEncoder,
-  getU64Decoder,
-  getU64Encoder,
   SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
   SolanaError,
   transformEncoder,
   type AccountMeta,
   type AccountSignerMeta,
   type Address,
-  type FixedSizeCodec,
-  type FixedSizeDecoder,
-  type FixedSizeEncoder,
+  type Codec,
+  type Decoder,
+  type Encoder,
   type Instruction,
   type InstructionWithAccounts,
   type InstructionWithData,
@@ -46,6 +46,12 @@ import {
 } from "@solana/program-client-core";
 import { findConfigPda } from "../pdas";
 import { BLOCKROUTER_PROGRAM_ADDRESS } from "../programs";
+import {
+  getModelUsageDecoder,
+  getModelUsageEncoder,
+  type ModelUsage,
+  type ModelUsageArgs,
+} from "../types";
 
 export const SETTLE_SESSION_USAGE_DISCRIMINATOR: ReadonlyUint8Array =
   new Uint8Array([27, 211, 151, 227, 58, 60, 105, 188]);
@@ -62,7 +68,6 @@ export type SettleSessionUsageInstruction<
   TAccountVault extends string | AccountMeta<string> = string,
   TAccountVaultAta extends string | AccountMeta<string> = string,
   TAccountSession extends string | AccountMeta<string> = string,
-  TAccountModel extends string | AccountMeta<string> = string,
   TAccountConfig extends string | AccountMeta<string> = string,
   TAccountProviderAta extends string | AccountMeta<string> = string,
   TAccountTokenProgram extends string | AccountMeta<string> =
@@ -87,9 +92,6 @@ export type SettleSessionUsageInstruction<
       TAccountSession extends string
         ? WritableAccount<TAccountSession>
         : TAccountSession,
-      TAccountModel extends string
-        ? ReadonlyAccount<TAccountModel>
-        : TAccountModel,
       TAccountConfig extends string
         ? ReadonlyAccount<TAccountConfig>
         : TAccountConfig,
@@ -111,21 +113,18 @@ export type SettleSessionUsageInstruction<
 
 export type SettleSessionUsageInstructionData = {
   discriminator: ReadonlyUint8Array;
-  promptTokens: bigint;
-  completionTokens: bigint;
+  usage: Array<ModelUsage>;
 };
 
 export type SettleSessionUsageInstructionDataArgs = {
-  promptTokens: number | bigint;
-  completionTokens: number | bigint;
+  usage: Array<ModelUsageArgs>;
 };
 
-export function getSettleSessionUsageInstructionDataEncoder(): FixedSizeEncoder<SettleSessionUsageInstructionDataArgs> {
+export function getSettleSessionUsageInstructionDataEncoder(): Encoder<SettleSessionUsageInstructionDataArgs> {
   return transformEncoder(
     getStructEncoder([
       ["discriminator", fixEncoderSize(getBytesEncoder(), 8)],
-      ["promptTokens", getU64Encoder()],
-      ["completionTokens", getU64Encoder()],
+      ["usage", getArrayEncoder(getModelUsageEncoder())],
     ]),
     (value) => ({
       ...value,
@@ -134,15 +133,14 @@ export function getSettleSessionUsageInstructionDataEncoder(): FixedSizeEncoder<
   );
 }
 
-export function getSettleSessionUsageInstructionDataDecoder(): FixedSizeDecoder<SettleSessionUsageInstructionData> {
+export function getSettleSessionUsageInstructionDataDecoder(): Decoder<SettleSessionUsageInstructionData> {
   return getStructDecoder([
     ["discriminator", fixDecoderSize(getBytesDecoder(), 8)],
-    ["promptTokens", getU64Decoder()],
-    ["completionTokens", getU64Decoder()],
+    ["usage", getArrayDecoder(getModelUsageDecoder())],
   ]);
 }
 
-export function getSettleSessionUsageInstructionDataCodec(): FixedSizeCodec<
+export function getSettleSessionUsageInstructionDataCodec(): Codec<
   SettleSessionUsageInstructionDataArgs,
   SettleSessionUsageInstructionData
 > {
@@ -157,7 +155,6 @@ export type SettleSessionUsageAsyncInput<
   TAccountVault extends InstructionAccountInput = InstructionAccountInput,
   TAccountVaultAta extends InstructionAccountInput = InstructionAccountInput,
   TAccountSession extends InstructionAccountInput = InstructionAccountInput,
-  TAccountModel extends InstructionAccountInput = InstructionAccountInput,
   TAccountConfig extends InstructionAccountInput = InstructionAccountInput,
   TAccountProviderAta extends InstructionAccountInput = InstructionAccountInput,
   TAccountTokenProgram extends InstructionAccountInput =
@@ -169,14 +166,12 @@ export type SettleSessionUsageAsyncInput<
   vault: TAccountVault;
   vaultAta?: TAccountVaultAta;
   session: TAccountSession;
-  model: TAccountModel;
   config?: TAccountConfig;
   providerAta: TAccountProviderAta;
   tokenProgram?: TAccountTokenProgram;
   mint: TAccountMint;
   beneficiary: TAccountBeneficiary;
-  promptTokens: SettleSessionUsageInstructionDataArgs["promptTokens"];
-  completionTokens: SettleSessionUsageInstructionDataArgs["completionTokens"];
+  usage: SettleSessionUsageInstructionDataArgs["usage"];
 };
 
 export async function getSettleSessionUsageInstructionAsync<
@@ -184,7 +179,6 @@ export async function getSettleSessionUsageInstructionAsync<
   TAccountVault extends InstructionAccountInput,
   TAccountVaultAta extends InstructionAccountInput,
   TAccountSession extends InstructionAccountInput,
-  TAccountModel extends InstructionAccountInput,
   TAccountConfig extends InstructionAccountInput,
   TAccountProviderAta extends InstructionAccountInput,
   TAccountTokenProgram extends InstructionAccountInput,
@@ -197,7 +191,6 @@ export async function getSettleSessionUsageInstructionAsync<
     TAccountVault,
     TAccountVaultAta,
     TAccountSession,
-    TAccountModel,
     TAccountConfig,
     TAccountProviderAta,
     TAccountTokenProgram,
@@ -223,10 +216,6 @@ export async function getSettleSessionUsageInstructionAsync<
     ResolvedInstructionAccountMeta<
       TAccountSession,
       InstructionAccountInputAddress<TAccountSession>
-    >,
-    ResolvedInstructionAccountMeta<
-      TAccountModel,
-      InstructionAccountInputAddress<TAccountModel>
     >,
     ResolvedInstructionAccountMeta<
       TAccountConfig,
@@ -274,7 +263,6 @@ export async function getSettleSessionUsageInstructionAsync<
       isSigner: false,
       isWritable: true,
     },
-    model: { value: input.model ?? null, isSigner: false, isWritable: false },
     config: { value: input.config ?? null, isSigner: false, isWritable: false },
     providerAta: {
       value: input.providerAta ?? null,
@@ -339,7 +327,6 @@ export async function getSettleSessionUsageInstructionAsync<
       getAccountMeta("vault", accounts.vault),
       getAccountMeta("vaultAta", accounts.vaultAta),
       getAccountMeta("session", accounts.session),
-      getAccountMeta("model", accounts.model),
       getAccountMeta("config", accounts.config),
       getAccountMeta("providerAta", accounts.providerAta),
       getAccountMeta("tokenProgram", accounts.tokenProgram),
@@ -369,10 +356,6 @@ export async function getSettleSessionUsageInstructionAsync<
       InstructionAccountInputAddress<TAccountSession>
     >,
     ResolvedInstructionAccountMeta<
-      TAccountModel,
-      InstructionAccountInputAddress<TAccountModel>
-    >,
-    ResolvedInstructionAccountMeta<
       TAccountConfig,
       InstructionAccountInputAddress<TAccountConfig>
     >,
@@ -400,7 +383,6 @@ export type SettleSessionUsageInput<
   TAccountVault extends InstructionAccountInput = InstructionAccountInput,
   TAccountVaultAta extends InstructionAccountInput = InstructionAccountInput,
   TAccountSession extends InstructionAccountInput = InstructionAccountInput,
-  TAccountModel extends InstructionAccountInput = InstructionAccountInput,
   TAccountConfig extends InstructionAccountInput = InstructionAccountInput,
   TAccountProviderAta extends InstructionAccountInput = InstructionAccountInput,
   TAccountTokenProgram extends InstructionAccountInput =
@@ -412,14 +394,12 @@ export type SettleSessionUsageInput<
   vault: TAccountVault;
   vaultAta: TAccountVaultAta;
   session: TAccountSession;
-  model: TAccountModel;
   config: TAccountConfig;
   providerAta: TAccountProviderAta;
   tokenProgram?: TAccountTokenProgram;
   mint: TAccountMint;
   beneficiary: TAccountBeneficiary;
-  promptTokens: SettleSessionUsageInstructionDataArgs["promptTokens"];
-  completionTokens: SettleSessionUsageInstructionDataArgs["completionTokens"];
+  usage: SettleSessionUsageInstructionDataArgs["usage"];
 };
 
 export function getSettleSessionUsageInstruction<
@@ -427,7 +407,6 @@ export function getSettleSessionUsageInstruction<
   TAccountVault extends InstructionAccountInput,
   TAccountVaultAta extends InstructionAccountInput,
   TAccountSession extends InstructionAccountInput,
-  TAccountModel extends InstructionAccountInput,
   TAccountConfig extends InstructionAccountInput,
   TAccountProviderAta extends InstructionAccountInput,
   TAccountTokenProgram extends InstructionAccountInput,
@@ -440,7 +419,6 @@ export function getSettleSessionUsageInstruction<
     TAccountVault,
     TAccountVaultAta,
     TAccountSession,
-    TAccountModel,
     TAccountConfig,
     TAccountProviderAta,
     TAccountTokenProgram,
@@ -465,10 +443,6 @@ export function getSettleSessionUsageInstruction<
   ResolvedInstructionAccountMeta<
     TAccountSession,
     InstructionAccountInputAddress<TAccountSession>
-  >,
-  ResolvedInstructionAccountMeta<
-    TAccountModel,
-    InstructionAccountInputAddress<TAccountModel>
   >,
   ResolvedInstructionAccountMeta<
     TAccountConfig,
@@ -515,7 +489,6 @@ export function getSettleSessionUsageInstruction<
       isSigner: false,
       isWritable: true,
     },
-    model: { value: input.model ?? null, isSigner: false, isWritable: false },
     config: { value: input.config ?? null, isSigner: false, isWritable: false },
     providerAta: {
       value: input.providerAta ?? null,
@@ -554,7 +527,6 @@ export function getSettleSessionUsageInstruction<
       getAccountMeta("vault", accounts.vault),
       getAccountMeta("vaultAta", accounts.vaultAta),
       getAccountMeta("session", accounts.session),
-      getAccountMeta("model", accounts.model),
       getAccountMeta("config", accounts.config),
       getAccountMeta("providerAta", accounts.providerAta),
       getAccountMeta("tokenProgram", accounts.tokenProgram),
@@ -582,10 +554,6 @@ export function getSettleSessionUsageInstruction<
     ResolvedInstructionAccountMeta<
       TAccountSession,
       InstructionAccountInputAddress<TAccountSession>
-    >,
-    ResolvedInstructionAccountMeta<
-      TAccountModel,
-      InstructionAccountInputAddress<TAccountModel>
     >,
     ResolvedInstructionAccountMeta<
       TAccountConfig,
@@ -620,12 +588,11 @@ export type ParsedSettleSessionUsageInstruction<
     vault: TAccountMetas[1];
     vaultAta: TAccountMetas[2];
     session: TAccountMetas[3];
-    model: TAccountMetas[4];
-    config: TAccountMetas[5];
-    providerAta: TAccountMetas[6];
-    tokenProgram: TAccountMetas[7];
-    mint: TAccountMetas[8];
-    beneficiary: TAccountMetas[9];
+    config: TAccountMetas[4];
+    providerAta: TAccountMetas[5];
+    tokenProgram: TAccountMetas[6];
+    mint: TAccountMetas[7];
+    beneficiary: TAccountMetas[8];
   };
   data: SettleSessionUsageInstructionData;
 };
@@ -638,12 +605,12 @@ export function parseSettleSessionUsageInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedSettleSessionUsageInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 10) {
+  if (instruction.accounts.length < 9) {
     throw new SolanaError(
       SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
       {
         actualAccountMetas: instruction.accounts.length,
-        expectedAccountMetas: 10,
+        expectedAccountMetas: 9,
       },
     );
   }
@@ -660,7 +627,6 @@ export function parseSettleSessionUsageInstruction<
       vault: getNextAccount(),
       vaultAta: getNextAccount(),
       session: getNextAccount(),
-      model: getNextAccount(),
       config: getNextAccount(),
       providerAta: getNextAccount(),
       tokenProgram: getNextAccount(),

@@ -1,4 +1,5 @@
 import { type Address, address, isAddress } from "@solana/kit";
+import { WALLET_AUTH_HEADERS } from "@blockrouter/client";
 import { Hono } from "hono";
 
 import { generateKey, hashKey, verifyWalletRequest } from "../auth";
@@ -6,6 +7,15 @@ import { ApiError, invalidRequest } from "../errors";
 import type { Deps } from "../app";
 
 const MAX_NAME_LENGTH = 64;
+export const MAX_DEFAULT_MAX_TOKENS = 200_000;
+
+function parseMaxTokens(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > MAX_DEFAULT_MAX_TOKENS) {
+    throw invalidRequest(`max_tokens must be an integer from 1 to ${MAX_DEFAULT_MAX_TOKENS}`);
+  }
+  return value as number;
+}
 
 type Env = { Variables: { wallet: Address } };
 
@@ -15,9 +25,9 @@ export function keyRoutes(deps: Deps) {
   routes.use("*", async (c, next) => {
     const wallet = await verifyWalletRequest(
       {
-        address: c.req.header("X-BlockRouter-Address"),
-        signature: c.req.header("X-BlockRouter-Signature"),
-        timestamp: c.req.header("X-BlockRouter-Timestamp"),
+        address: c.req.header(WALLET_AUTH_HEADERS.address),
+        signature: c.req.header(WALLET_AUTH_HEADERS.signature),
+        timestamp: c.req.header(WALLET_AUTH_HEADERS.timestamp),
       },
       c.req.method,
       new URL(c.req.url).pathname,
@@ -37,6 +47,7 @@ export function keyRoutes(deps: Deps) {
       throw invalidRequest("session must be the address of an open session. Open one with `br session open`");
     }
 
+    const defaultMaxTokens = parseMaxTokens(body.max_tokens);
     const wallet = c.get("wallet");
     const session = await deps.chain.getSession(address(body.session));
     if (!session) {
@@ -65,8 +76,12 @@ export function keyRoutes(deps: Deps) {
       ownerPubkey: wallet,
       createdAt,
       revokedAt: null,
+      defaultMaxTokens,
     });
-    return c.json({ id, name, key, session: session.address, created_at: createdAt }, 201);
+    return c.json(
+      { id, name, key, session: session.address, created_at: createdAt, max_tokens: defaultMaxTokens },
+      201,
+    );
   });
 
   routes.get("/", (c) => {
@@ -76,8 +91,20 @@ export function keyRoutes(deps: Deps) {
       session: key.sessionPubkey,
       created_at: key.createdAt,
       revoked_at: key.revokedAt,
+      max_tokens: key.defaultMaxTokens,
     }));
     return c.json({ object: "list", data: keys });
+  });
+
+  // max_tokens: null resets to the relayer default.
+  routes.patch("/:id", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || !("max_tokens" in body)) throw invalidRequest("send { \"max_tokens\": <n or null> }");
+    const maxTokens = parseMaxTokens(body.max_tokens);
+    if (!deps.store.setDefaultMaxTokens(c.req.param("id"), c.get("wallet"), maxTokens)) {
+      throw new ApiError(404, "not_found_error", "key_not_found", "no active key with that id for this wallet");
+    }
+    return c.json({ id: c.req.param("id"), max_tokens: maxTokens });
   });
 
   routes.delete("/:id", (c) => {

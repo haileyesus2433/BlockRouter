@@ -10,6 +10,7 @@ export type Deployment = {
   usdcMint: Address;
   mockUsdtMint: Address | null;
   relayer: Address | null;
+  relayerUrl: string | null;
   models: { id: number; alias: string; promptRate: number; completionRate: number }[];
 };
 
@@ -31,6 +32,7 @@ export function loadDeployment(cluster: Cluster): Deployment {
     usdcMint: address(raw.usdcMint),
     mockUsdtMint: raw.mockUsdtMint ? address(raw.mockUsdtMint) : null,
     relayer: raw.relayer ? address(raw.relayer) : null,
+    relayerUrl: typeof raw.relayerUrl === "string" ? raw.relayerUrl : null,
     models: raw.models,
   };
 }

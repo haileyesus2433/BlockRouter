@@ -94,6 +94,8 @@ export const BLOCKROUTER_ERROR__PAYER_ACCOUNT_MISMATCH = 0x1795; // 6037
 export const BLOCKROUTER_ERROR__UNSUPPORTED_MINT = 0x1796; // 6038
 /** SessionModelMismatch: Model does not match the session binding */
 export const BLOCKROUTER_ERROR__SESSION_MODEL_MISMATCH = 0x1797; // 6039
+/** DuplicateModel: A model appears more than once */
+export const BLOCKROUTER_ERROR__DUPLICATE_MODEL = 0x1798; // 6040
 
 export type BlockrouterError =
   | typeof BLOCKROUTER_ERROR__ALLOWANCE_EXPIRED
@@ -104,6 +106,7 @@ export type BlockrouterError =
   | typeof BLOCKROUTER_ERROR__CHARGE_EXCEEDS_RESERVATION
   | typeof BLOCKROUTER_ERROR__DISPUTE_WINDOW_ACTIVE
   | typeof BLOCKROUTER_ERROR__DISPUTE_WINDOW_CLOSED
+  | typeof BLOCKROUTER_ERROR__DUPLICATE_MODEL
   | typeof BLOCKROUTER_ERROR__ESCROW_DISPUTED
   | typeof BLOCKROUTER_ERROR__EXCEEDS_ALLOWANCE_HEADROOM
   | typeof BLOCKROUTER_ERROR__EXCEEDS_UNCOMMITTED_BALANCE
@@ -148,6 +151,7 @@ if (process.env["NODE_ENV"] !== "production") {
     [BLOCKROUTER_ERROR__CHARGE_EXCEEDS_RESERVATION]: `Computed charge exceeds the session reservation`,
     [BLOCKROUTER_ERROR__DISPUTE_WINDOW_ACTIVE]: `Dispute window is still active`,
     [BLOCKROUTER_ERROR__DISPUTE_WINDOW_CLOSED]: `Dispute window has closed`,
+    [BLOCKROUTER_ERROR__DUPLICATE_MODEL]: `A model appears more than once`,
     [BLOCKROUTER_ERROR__ESCROW_DISPUTED]: `Escrow is under dispute`,
     [BLOCKROUTER_ERROR__EXCEEDS_ALLOWANCE_HEADROOM]: `Amount exceeds the allowance's remaining headroom`,
     [BLOCKROUTER_ERROR__EXCEEDS_UNCOMMITTED_BALANCE]: `Amount exceeds the sponsor vault's uncommitted balance`,
