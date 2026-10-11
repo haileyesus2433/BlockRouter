@@ -11,6 +11,7 @@ import type { AddressInfo } from "node:net";
 import { createApp } from "../src/app.js";
 import { ConfigurationError, loadConfig } from "../src/config.js";
 import { createProgramClient } from "../src/client.js";
+import { MockProvider } from "../src/mock-provider.js";
 import type { Provider, ChatRequest, ChatChunk } from "../src/provider.js";
 
 const programId = "7maTNWbtCpuCXeRUVCNDR2a9YU7kaeUqtvrqz4ustyyi";
@@ -301,25 +302,12 @@ test("startup config errors exit nonzero without revealing secrets", () => {
 });
 
 test("Provider contract supports typed async text, completion usage and prompt-token estimates", async () => {
-  const adapter: Provider = {
-    id: "test-only",
-    async *chat(_req: ChatRequest): AsyncIterable<ChatChunk> {
-      yield { type: "text", delta: "hello" };
-      yield {
-        type: "done",
-        finishReason: "stop",
-        usage: { promptTokens: 1, completionTokens: 1 },
-      };
-    },
-    countTokens(req) {
-      return req.messages.length;
-    },
-  };
+  const adapter: Provider = new MockProvider();
   const request: ChatRequest = {
     model: "test-model",
     messages: [{ role: "user", content: "hello" }],
   };
-  assert.equal(adapter.id, "test-only");
+  assert.equal(adapter.id, "mock");
   assert.equal(adapter.countTokens(request), 1);
   const chunks: ChatChunk[] = [];
   for await (const chunk of adapter.chat(request)) chunks.push(chunk);
