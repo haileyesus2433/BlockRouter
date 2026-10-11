@@ -14,8 +14,31 @@ cd relayer && node --env-file=.env --import tsx src/server.ts
 curl http://127.0.0.1:8787/health
 ```
 
-Without `UPSTREAM_BASE_URL` and `UPSTREAM_API_KEY` it serves the deterministic mock provider. See
-`.env.example` for every setting.
+See `.env.example` for every setting.
+
+## Upstream providers
+
+Each model can be served by a different OpenAI-compatible provider. Copy `providers.example.json`
+to `providers.json`, set `PROVIDERS_FILE=providers.json`, and export the key variable each provider
+names:
+
+```json
+{
+  "providers": {
+    "deepseek": { "baseUrl": "https://api.deepseek.com/v1", "apiKeyEnv": "DEEPSEEK_API_KEY" },
+    "openrouter": { "baseUrl": "https://openrouter.ai/api/v1", "apiKeyEnv": "OPENROUTER_API_KEY" }
+  },
+  "models": {
+    "deepseek-v3": { "provider": "deepseek", "upstream": "deepseek-chat" },
+    "llama-3.3-70b": { "provider": "openrouter", "upstream": "meta-llama/llama-3.3-70b-instruct" }
+  }
+}
+```
+
+Keys never go in the file. Every alias must be registered on-chain in the deployment, because that
+is where its price lives; models with no provider are hidden from `/v1/models` and refused. For a
+single provider, `UPSTREAM_BASE_URL`, `UPSTREAM_API_KEY`, and `UPSTREAM_MODELS` still work. With no
+upstream configured, the deterministic mock provider answers every model.
 
 The relayer keypair (`RELAYER_KEYPAIR`) signs settlements only. Sessions must be opened with
 `--relayer <its address>`, which is printed at startup.

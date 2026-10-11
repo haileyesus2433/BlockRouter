@@ -69,7 +69,7 @@ export class Ledger {
   /** The model a request asks for, if this session may use it. */
   choose(active: ActiveSession, requested: string): ModelChoice {
     const alias = this.models.find((model) => model.alias === requested);
-    if (!alias) throw modelNotFound(requested);
+    if (!alias || !alias.available) throw modelNotFound(requested);
     if (!active.session.allowedModels.includes(alias.id)) {
       throw modelNotAllowed(requested, this.allowedAliases(active));
     }

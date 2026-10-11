@@ -1,0 +1,10 @@
+{
+  "providers": {
+    "deepseek": { "baseUrl": "https://api.deepseek.com/v1", "apiKeyEnv": "DEEPSEEK_API_KEY" },
+    "openrouter": { "baseUrl": "https://openrouter.ai/api/v1", "apiKeyEnv": "OPENROUTER_API_KEY" }
+  },
+  "models": {
+    "deepseek-v3": { "provider": "deepseek", "upstream": "deepseek-chat" },
+    "llama-3.3-70b": { "provider": "openrouter", "upstream": "meta-llama/llama-3.3-70b-instruct" }
+  }
+}

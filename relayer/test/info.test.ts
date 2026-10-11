@@ -7,7 +7,7 @@ import { fakeChain, issueKey, model, NOW_SECS, openSession, randomAddress, testC
 function setup() {
   const chain = fakeChain();
   const config = testConfig({
-    models: [...testConfig().models, { id: 3, alias: "unregistered", upstream: "x" }],
+    models: [...testConfig().models, { id: 3, alias: "unregistered", upstream: "x", provider: null, available: true }],
   });
   const deps = testDeps({ chain, config });
   return { chain, deps, app: createApp(deps) };

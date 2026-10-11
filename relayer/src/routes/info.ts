@@ -10,7 +10,7 @@ export function infoRoutes(deps: Deps) {
   // Rates are the raw on-chain values (base units per 1,000,000 tokens), never reformatted.
   routes.get("/models", async (c) => {
     const data = [];
-    for (const alias of deps.config.models) {
+    for (const alias of deps.config.models.filter((entry) => entry.available)) {
       const model = await deps.chain.getModel(alias.id);
       if (!model) continue;
       data.push({

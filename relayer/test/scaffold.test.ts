@@ -10,7 +10,7 @@ test("health reports cluster and provider", async () => {
   const app = createApp(testDeps());
   const response = await app.request("/health");
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ok", cluster: "localnet", provider: "mock" });
+  assert.deepEqual(await response.json(), { status: "ok", cluster: "localnet", provider: "mock", providers: [] });
 });
 
 test("charge mirrors the on-chain math and rounds down", () => {
@@ -31,11 +31,14 @@ test("effective rates switch to pending once the timelock passes", () => {
 test("config reads models from the deployment and maps upstream names", () => {
   const config = loadConfig({
     CLUSTER: "devnet",
+    UPSTREAM_BASE_URL: "https://api.example.com/v1",
+    UPSTREAM_API_KEY: "sk-test-key",
     UPSTREAM_MODELS: "deepseek-v3=deepseek-chat",
   });
   assert.equal(config.models.find((m) => m.alias === "deepseek-v3")?.upstream, "deepseek-chat");
   assert.equal(config.models.find((m) => m.alias === "llama-3.3-70b")?.upstream, "llama-3.3-70b");
-  assert.equal(config.upstream, null);
+  assert.deepEqual(Object.keys(config.providers), ["upstream"]);
+  assert.ok(config.models.every((m) => m.provider === "upstream" && m.available));
 });
 
 test("config rejects a half-configured upstream", () => {

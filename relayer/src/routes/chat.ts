@@ -184,7 +184,8 @@ export function chatRoutes(deps: Deps) {
       toolChoice: body.toolChoice,
       options: body.options,
     };
-    const estimatedPrompt = deps.provider.countTokens(request);
+    const provider = (choice.alias.provider && deps.providers.get(choice.alias.provider)) || deps.provider;
+    const estimatedPrompt = provider.countTokens(request);
     const paddedPrompt = (BigInt(estimatedPrompt) * PROMPT_ESTIMATE_NUM + PROMPT_ESTIMATE_DEN - 1n) / PROMPT_ESTIMATE_DEN;
 
     // No awaits from here until the hold is placed, so concurrent requests see each other's holds.
@@ -226,7 +227,7 @@ export function chatRoutes(deps: Deps) {
       let usage: Usage | null = null;
       const toolCalls = new ToolCallBuffer();
       try {
-        for await (const chunk of deps.provider.chat(request)) {
+        for await (const chunk of provider.chat(request)) {
           if (chunk.type === "delta") content += chunk.content;
           else if (chunk.type === "tool_call") toolCalls.add(chunk.delta);
           else usage = chunk.usage;
@@ -292,7 +293,7 @@ export function chatRoutes(deps: Deps) {
 
       try {
         await stream.writeSSE({ data: JSON.stringify(frame({ role: "assistant" }, null)) });
-        for await (const chunk of deps.provider.chat(request, controller.signal)) {
+        for await (const chunk of provider.chat(request, controller.signal)) {
           if (stream.aborted) return;
           if (chunk.type === "usage") {
             usage = chunk.usage;

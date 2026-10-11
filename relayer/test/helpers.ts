@@ -30,15 +30,15 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     relayerKeypair: "unused",
     dbPath: ":memory:",
     models: [
-      { id: 1, alias: "deepseek-v3", upstream: "deepseek-chat" },
-      { id: 2, alias: "llama-3.3-70b", upstream: "llama-3.3-70b" },
+      { id: 1, alias: "deepseek-v3", upstream: "deepseek-chat", provider: null, available: true },
+      { id: 2, alias: "llama-3.3-70b", upstream: "llama-3.3-70b", provider: null, available: true },
     ],
     settleThresholdBps: 8_000,
     settleBeforeExpirySecs: 600,
     settleIntervalSecs: 0,
     workerTickSecs: 15,
     rateLimitPerMinute: 1_000,
-    upstream: null,
+    providers: {},
     ...overrides,
   };
 }
@@ -117,6 +117,7 @@ export function testDeps(overrides: Partial<Deps> = {}): Deps {
     config,
     chain,
     provider: new MockProvider(),
+    providers: new Map(),
     store,
     ledger: new Ledger(store, chain, config.models),
     nowSecs: () => NOW_SECS,

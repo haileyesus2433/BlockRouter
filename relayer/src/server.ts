@@ -12,19 +12,24 @@ import { SettlementWorker } from "./worker";
 
 async function main() {
   const config = loadConfig();
-  const redact = createRedactor([config.rpcUrl, config.upstream?.apiKey, config.upstream?.baseUrl]);
+  const upstreams = Object.values(config.providers);
+  const redact = createRedactor([config.rpcUrl, ...upstreams.flatMap((upstream) => [upstream.apiKey, upstream.baseUrl])]);
   const chain = await createKitChain({ rpcUrl: config.rpcUrl, relayerKeypair: config.relayerKeypair });
-  const provider = config.upstream ? new OpenAICompatibleProvider(config.upstream) : new MockProvider();
+  const provider = new MockProvider();
+  const providers = new Map(
+    Object.entries(config.providers).map(([id, upstream]) => [id, new OpenAICompatibleProvider(upstream)]),
+  );
   const store = new Store(config.dbPath);
   const ledger = new Ledger(store, chain, config.models);
   const nowSecs = () => Math.floor(Date.now() / 1000);
-  const app = createApp({ config, chain, provider, store, ledger, nowSecs });
+  const app = createApp({ config, chain, provider, providers, store, ledger, nowSecs });
 
   const worker = new SettlementWorker({ config, chain, store, ledger, nowSecs, redact });
   worker.start();
 
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, ({ port }) => {
-    console.log(`relayer ${chain.relayer} listening on ${config.host}:${port} (${config.cluster}, provider ${provider.id})`);
+    const served = providers.size > 0 ? [...providers.keys()].join(", ") : "mock";
+    console.log(`relayer ${chain.relayer} listening on ${config.host}:${port} (${config.cluster}, providers: ${served})`);
   });
   server.on("error", () => {
     console.error("relayer HTTP server failed to listen. Check HOST and PORT.");

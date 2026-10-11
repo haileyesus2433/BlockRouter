@@ -13,7 +13,10 @@ import type { Store } from "./store";
 export type Deps = {
   config: Config;
   chain: Chain;
+  /** Serves models without a configured upstream: the mock provider. */
   provider: Provider;
+  /** Upstream providers by id, from PROVIDERS_FILE or UPSTREAM_*. */
+  providers: Map<string, Provider>;
   store: Store;
   ledger: Ledger;
   /** Wall clock in unix seconds, injectable for tests. */
@@ -32,7 +35,12 @@ export function createApp(deps: Deps) {
   app.notFound((c) => errorResponse(c, new ApiError(404, "not_found_error", "not_found", "no such route")));
 
   app.get("/health", (c) =>
-    c.json({ status: "ok", cluster: deps.config.cluster, provider: deps.provider.id }),
+    c.json({
+      status: "ok",
+      cluster: deps.config.cluster,
+      provider: deps.providers.size > 0 ? "upstream" : deps.provider.id,
+      providers: [...deps.providers.keys()],
+    }),
   );
   app.route("/v1/keys", keyRoutes(deps));
   app.route("/v1", infoRoutes(deps));
