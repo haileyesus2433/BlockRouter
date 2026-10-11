@@ -150,6 +150,12 @@ function loadProvidersFile(env: NodeJS.ProcessEnv): Providers {
     if (typeof provider?.baseUrl !== "string" || typeof provider?.apiKeyEnv !== "string") {
       throw new ConfigurationError(`provider "${id}" needs baseUrl and apiKeyEnv`);
     }
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(provider.apiKeyEnv)) {
+      // Catches a key pasted where the variable name belongs, without echoing it.
+      throw new ConfigurationError(
+        `provider "${id}" apiKeyEnv must be the NAME of an environment variable (like DEEPSEEK_API_KEY), not the key`,
+      );
+    }
     const apiKey = env[provider.apiKeyEnv];
     if (!apiKey || !apiKey.trim()) {
       throw new ConfigurationError(`provider "${id}" needs ${provider.apiKeyEnv} set in the environment`);

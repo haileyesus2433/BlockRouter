@@ -65,6 +65,7 @@ for (const [name, contents, env, message] of [
   ["a model outside the deployment", { providers: {}, models: { "gpt-9": { provider: "x", upstream: "y" } } }, KEYS, /unknown provider|not in deployments/],
   ["a bad base URL", { providers: { a: { baseUrl: "ftp://x", apiKeyEnv: "DEEPSEEK_API_KEY" } }, models: {} }, KEYS, /baseUrl must be/],
   ["invalid JSON", "{ nope", KEYS, /cannot read PROVIDERS_FILE/],
+  ["a key pasted as apiKeyEnv", { providers: { a: { baseUrl: "https://x.example", apiKeyEnv: "sk-SECRET-123" } }, models: {} }, KEYS, /must be the NAME of an environment variable/],
   ["missing sections", { providers: {} }, KEYS, /needs "providers" and "models"/],
 ] as const) {
   test(`provider config rejects ${name} without echoing secrets`, () => {
