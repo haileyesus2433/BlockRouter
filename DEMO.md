@@ -83,9 +83,10 @@ the balance.
 
 ## 4. A real coding agent spends against it (60s)
 
-Start OpenCode, run `/models`, pick **DeepSeek V3 via BlockRouter**, and ask a question it can
-answer in one turn, for example "Explain what a PDA is in two sentences." Keep to single-turn
-questions: tool calls (file edits, shell commands) are not forwarded by the relayer yet.
+Start OpenCode in a small project, run `/models`, pick **DeepSeek V3 via BlockRouter**, and give it
+a real task, for example "Read README.md and add a one-line summary at the top." It reads files and
+edits them through tool calls, all routed through the relayer. Tool calls need an upstream model
+that supports them (DeepSeek V3 does); the mock provider only answers with text.
 
 While it answers, show the relayer terminal: one `usage` line per request with token counts and
 the charge. Prompt content is never logged.

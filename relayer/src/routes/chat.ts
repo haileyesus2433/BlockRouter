@@ -13,7 +13,14 @@ import {
 } from "../errors";
 import { type ActiveSession, jsonInt, worstCaseRates } from "../ledger";
 import { charge, type Rates } from "../pricing";
-import type { ChatMessage, ChatRequest, Usage } from "../providers/types";
+import {
+  type ChatMessage,
+  type ChatRequest,
+  PASSTHROUGH_OPTIONS,
+  type ToolCall,
+  type ToolCallDelta,
+  type Usage,
+} from "../providers/types";
 import { RateLimiter } from "../rate-limit";
 
 const DEFAULT_MAX_TOKENS = 4_096;
@@ -22,7 +29,8 @@ const RATE_DENOMINATOR = 1_000_000n;
 const PROMPT_ESTIMATE_NUM = 5n;
 const PROMPT_ESTIMATE_DEN = 4n;
 const CHARS_PER_TOKEN = 4;
-const ROLES = new Set(["system", "user", "assistant", "tool"]);
+const ROLES = new Set(["system", "developer", "user", "assistant", "tool"]);
+const MAX_TOOLS = 128;
 
 type Body = {
   model: string;
@@ -30,7 +38,9 @@ type Body = {
   stream: boolean;
   includeUsage: boolean;
   maxTokens: number | null;
-  temperature?: number;
+  tools?: unknown[];
+  toolChoice?: unknown;
+  options: ChatRequest["options"];
 };
 
 function textOf(content: unknown): string | null {
@@ -42,19 +52,50 @@ function textOf(content: unknown): string | null {
   return null;
 }
 
+function parseToolCalls(raw: unknown, index: number): ToolCall[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw)) throw invalidRequest(`messages[${index}].tool_calls must be an array`);
+  return raw.map((call: any) => {
+    if (typeof call?.id !== "string" || typeof call?.function?.name !== "string" || typeof call?.function?.arguments !== "string") {
+      throw invalidRequest(`messages[${index}].tool_calls entries need id, function.name, and function.arguments`);
+    }
+    return { id: call.id, type: "function", function: { name: call.function.name, arguments: call.function.arguments } };
+  });
+}
+
+function parseMessage(message: any, index: number): ChatMessage {
+  if (!ROLES.has(message?.role)) throw invalidRequest(`messages[${index}] has an unsupported role`);
+  const toolCalls = message.role === "assistant" ? parseToolCalls(message.tool_calls, index) : undefined;
+  const content = message.content === null || message.content === undefined ? null : textOf(message.content);
+  if (content === null && !(toolCalls && toolCalls.length > 0)) {
+    throw invalidRequest(`messages[${index}] must have text content`);
+  }
+  if (message.role === "tool" && typeof message.tool_call_id !== "string") {
+    throw invalidRequest(`messages[${index}] is a tool result and needs tool_call_id`);
+  }
+  return {
+    role: message.role,
+    content,
+    ...(typeof message.name === "string" ? { name: message.name } : {}),
+    ...(toolCalls ? { tool_calls: toolCalls } : {}),
+    ...(message.role === "tool" ? { tool_call_id: message.tool_call_id } : {}),
+  };
+}
+
 function parseBody(raw: any): Body {
   if (!raw || typeof raw.model !== "string") throw invalidRequest("model is required");
   if (!Array.isArray(raw.messages) || raw.messages.length === 0) throw invalidRequest("messages must be a non-empty array");
-  const messages = raw.messages.map((message: any, index: number) => {
-    const content = textOf(message?.content);
-    if (!ROLES.has(message?.role) || content === null) {
-      throw invalidRequest(`messages[${index}] must have a role and text content`);
-    }
-    return { role: message.role, content };
-  });
+  const messages = raw.messages.map(parseMessage);
   const maxTokens = raw.max_completion_tokens ?? raw.max_tokens ?? null;
   if (maxTokens !== null && (!Number.isInteger(maxTokens) || maxTokens < 1)) {
     throw invalidRequest("max_tokens must be a positive integer");
+  }
+  if (raw.tools !== undefined && (!Array.isArray(raw.tools) || raw.tools.length > MAX_TOOLS)) {
+    throw invalidRequest(`tools must be an array of at most ${MAX_TOOLS} tool definitions`);
+  }
+  const options: NonNullable<ChatRequest["options"]> = {};
+  for (const name of PASSTHROUGH_OPTIONS) {
+    if (raw[name] !== undefined) options[name] = raw[name];
   }
   return {
     model: raw.model,
@@ -62,7 +103,53 @@ function parseBody(raw: any): Body {
     stream: raw.stream === true,
     includeUsage: raw.stream_options?.include_usage === true,
     maxTokens,
-    temperature: typeof raw.temperature === "number" ? raw.temperature : undefined,
+    tools: raw.tools?.length ? raw.tools : undefined,
+    toolChoice: raw.tool_choice,
+    options,
+  };
+}
+
+/** Assembles streamed tool-call deltas into complete OpenAI tool calls. */
+class ToolCallBuffer {
+  private readonly calls = new Map<number, ToolCall>();
+  chars = 0;
+
+  add(delta: ToolCallDelta): void {
+    const call = this.calls.get(delta.index) ?? { id: "", type: "function" as const, function: { name: "", arguments: "" } };
+    if (delta.id) call.id = delta.id;
+    if (delta.name) call.function.name += delta.name;
+    if (delta.arguments) call.function.arguments += delta.arguments;
+    this.chars += (delta.name?.length ?? 0) + (delta.arguments?.length ?? 0);
+    this.calls.set(delta.index, call);
+  }
+
+  list(): ToolCall[] {
+    return [...this.calls.entries()].sort(([a], [b]) => a - b).map(([, call]) => call);
+  }
+
+  get size(): number {
+    return this.calls.size;
+  }
+}
+
+function finishReason(usage: Usage, maxTokens: number, toolCalls: number): "tool_calls" | "length" | "stop" {
+  if (toolCalls > 0) return "tool_calls";
+  return usage.completionTokens >= maxTokens ? "length" : "stop";
+}
+
+// SSE delta for one tool-call piece, in OpenAI's shape.
+function toolCallFrameDelta(delta: ToolCallDelta) {
+  return {
+    tool_calls: [
+      {
+        index: delta.index,
+        ...(delta.id ? { id: delta.id, type: "function" } : {}),
+        function: {
+          ...(delta.name !== undefined ? { name: delta.name } : {}),
+          ...(delta.arguments !== undefined ? { arguments: delta.arguments } : {}),
+        },
+      },
+    ],
   };
 }
 
@@ -99,7 +186,9 @@ export function chatRoutes(deps: Deps) {
       model: active.alias.upstream,
       messages: body.messages,
       maxTokens: body.maxTokens ?? DEFAULT_MAX_TOKENS,
-      temperature: body.temperature,
+      tools: body.tools,
+      toolChoice: body.toolChoice,
+      options: body.options,
     };
     const estimatedPrompt = deps.provider.countTokens(request);
     const paddedPrompt = (BigInt(estimatedPrompt) * PROMPT_ESTIMATE_NUM + PROMPT_ESTIMATE_DEN - 1n) / PROMPT_ESTIMATE_DEN;
@@ -134,9 +223,11 @@ export function chatRoutes(deps: Deps) {
     if (!body.stream) {
       let content = "";
       let usage: Usage | null = null;
+      const toolCalls = new ToolCallBuffer();
       try {
         for await (const chunk of deps.provider.chat(request)) {
           if (chunk.type === "delta") content += chunk.content;
+          else if (chunk.type === "tool_call") toolCalls.add(chunk.delta);
           else usage = chunk.usage;
         }
       } catch {
@@ -158,8 +249,12 @@ export function chatRoutes(deps: Deps) {
         choices: [
           {
             index: 0,
-            message: { role: "assistant", content },
-            finish_reason: usage.completionTokens >= request.maxTokens ? "length" : "stop",
+            message: {
+              role: "assistant",
+              content: content || (toolCalls.size > 0 ? null : ""),
+              ...(toolCalls.size > 0 ? { tool_calls: toolCalls.list() } : {}),
+            },
+            finish_reason: finishReason(usage, request.maxTokens, toolCalls.size),
           },
         ],
         usage: {
@@ -177,7 +272,8 @@ export function chatRoutes(deps: Deps) {
     return streamSSE(c, async (stream) => {
       let streamedChars = 0;
       let usage: Usage | null = null;
-      const frame = (delta: Record<string, string>, finish: string | null) => ({
+      const toolCalls = new ToolCallBuffer();
+      const frame = (delta: Record<string, unknown>, finish: string | null) => ({
         id,
         object: "chat.completion.chunk",
         created,
@@ -189,7 +285,7 @@ export function chatRoutes(deps: Deps) {
         // Bill what was already delivered so aborting early is not free inference.
         settle({
           promptTokens: estimatedPrompt,
-          completionTokens: Math.ceil(streamedChars / CHARS_PER_TOKEN),
+          completionTokens: Math.ceil((streamedChars + toolCalls.chars) / CHARS_PER_TOKEN),
         });
       });
 
@@ -199,6 +295,11 @@ export function chatRoutes(deps: Deps) {
           if (stream.aborted) return;
           if (chunk.type === "usage") {
             usage = chunk.usage;
+            continue;
+          }
+          if (chunk.type === "tool_call") {
+            toolCalls.add(chunk.delta);
+            await stream.writeSSE({ data: JSON.stringify(frame(toolCallFrameDelta(chunk.delta), null)) });
             continue;
           }
           streamedChars += chunk.content.length;
@@ -219,7 +320,7 @@ export function chatRoutes(deps: Deps) {
       }
 
       const charged = settle(usage);
-      const finish = usage.completionTokens >= request.maxTokens ? "length" : "stop";
+      const finish = finishReason(usage, request.maxTokens, toolCalls.size);
       await stream.writeSSE({ data: JSON.stringify(frame({}, finish)) });
       if (body.includeUsage) {
         await stream.writeSSE({

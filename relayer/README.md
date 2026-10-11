@@ -35,6 +35,13 @@ The relayer keypair (`RELAYER_KEYPAIR`) signs settlements only. Sessions must be
 
 Rates are base units per 1,000,000 tokens, exactly as stored on-chain.
 
+**Tool calling** is passed through end to end, so coding agents can read and edit files: `tools`,
+`tool_choice`, assistant messages with `tool_calls`, and `tool` result messages go to the upstream
+unchanged, and tool calls come back as `message.tool_calls` or streamed `delta.tool_calls` with
+`finish_reason: "tool_calls"`. Tool definitions and arguments count toward the prompt estimate.
+`temperature`, `top_p`, `stop`, `seed`, `presence_penalty`, `frequency_penalty`, `response_format`,
+and `parallel_tool_calls` are forwarded as well.
+
 **Wallet signature.** Key endpoints take `X-BlockRouter-Address`, `X-BlockRouter-Timestamp` (unix
 seconds, within 5 minutes), and `X-BlockRouter-Signature` (base58 Ed25519) over:
 
