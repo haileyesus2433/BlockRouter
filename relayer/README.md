@@ -109,3 +109,33 @@ git diff --check
 Tests use temporary IDLs and nonsecret sentinel values, Hono's in-memory request
 API and one ephemeral local HTTP listener. They use no external RPC, AI service,
 real wallet or credentials. Rust/Anchor source is unchanged.
+
+## On-chain model listing (Issue #26)
+
+`GET /v1/models` returns `{ "object": "list", "data": [...] }` from the configured
+BlockRouter program's Model accounts, including inactive Models. Entries are
+sorted by numeric `model_id`. The account has no model name and the repository
+has no authoritative name mapping, so `id` is the decimal string of `model_id`;
+it is not an invented provider model name.
+
+Both rate fields are always **decimal strings** to preserve every u64 value.
+They represent integer payment-mint base units per 1,000,000 tokens. They are not
+converted to dollars, rounded, or divided. Effective rates match the program's
+`Model::effective_rates`: pending rates apply when `effective_at != 0` and the
+Solana Clock timestamp is greater than or equal to `effective_at`.
+
+The reader discovers Model addresses with the Anchor discriminator filter and
+then fetches up to 99 Models plus Clock per batch, decoding accounts through the
+configured Anchor IDL. Each batch reads Models and Clock from the same bank at
+confirmed commitment, at least as recent as the discovery slot. Large registries
+can span different banks between batches; the listing is not a globally atomic
+snapshot or a guarantee of the price of a future settlement. No account results
+are cached. An empty registry needs only the discovery request. Malformed
+accounts or RPC failures return a generic HTTP 503 without exception details.
+
+`GET /v1/session/current` remains unavailable (404). Issue #27 must provide a
+verified session-bound identity before this route can disclose any Session.
+Session stores `reserved_amount` and `expires_at`, but no pending-usage ledger or
+charged amount. Pending usage and remaining spendable cap cannot safely be
+invented from that state. Issue #26 is therefore partially complete pending the
+authentication and relayer accounting contract.

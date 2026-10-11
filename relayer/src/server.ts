@@ -1,12 +1,13 @@
 import { serve } from "@hono/node-server";
+import { createModelRegistry } from "./models.js";
 import { createApp } from "./app.js";
 import { loadConfig, ConfigurationError } from "./config.js";
 import { createProgramClient } from "./client.js";
 
 async function main() {
   const config = await loadConfig();
-  await createProgramClient(config);
-  const app = createApp();
+  const client = await createProgramClient(config);
+  const app = createApp(createModelRegistry(client.program));
   const server = serve({
     fetch: app.fetch,
     hostname: config.host,
