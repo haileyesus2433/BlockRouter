@@ -16,6 +16,8 @@ export type AppData = {
   refresh: () => Promise<void>;
   notify: (notice: Notice) => void;
   go: (view: View) => void;
+  /** Wallet-signed results kept across page visits, scoped to this identity. */
+  cache: Map<string, unknown>;
 };
 
 export const isActive = (session: SessionView) => Number(session.data.expiresAt) > chainNow();

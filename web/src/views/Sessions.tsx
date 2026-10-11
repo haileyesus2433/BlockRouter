@@ -1,13 +1,14 @@
 import { useState } from "react";
 
 import type { SessionView } from "../chain";
+import { ActivityList } from "../components/Activity";
 import { Icon } from "../components/icons";
 import { Choice, Empty, Meter, Modal, PageHeader, Panel, useRunner } from "../components/ui";
 import { deployment, explorerTx, modelAlias } from "../config";
 import { type AppData, isActive } from "../context";
 import { formatUnits, parseAmount, ratePerMillion, shortAddress, timeLeft } from "../format";
-import { useSessionUsage } from "../hooks";
-import { closeSession, listRelayerSessions, type RelayerSession } from "../relayer";
+import { useActivityFeed, useSessionUsage, useSignedData } from "../hooks";
+import { closeSession, listRelayerSessions, rememberedKey, sessionRequestsSigned } from "../relayer";
 import { openSession, reclaim } from "../tx";
 import { NewKeyModal } from "./Keys";
 
@@ -107,11 +108,54 @@ function NewSessionModal({ app, onClose }: { app: AppData; onClose: () => void }
   );
 }
 
+function SignedActivity({ app, session }: { app: AppData; session: SessionView }) {
+  const { data, loading, load } = useSignedData(app, `requests:${session.address}`, () => sessionRequestsSigned(app.identity, session.address));
+  if (!data) {
+    return (
+      <div className="empty compact">
+        <span className="muted">This browser has no key for the session, so loading asks your wallet to sign a message.</span>
+        <button className="small" disabled={loading} onClick={load}>
+          {loading ? "Loading…" : "Load activity"}
+        </button>
+      </div>
+    );
+  }
+  return data.data.length ? <ActivityList entries={data.data} mint={app.mint} /> : <p className="muted small">No requests yet.</p>;
+}
+
+function KeyActivity({ app, session }: { app: AppData; session: SessionView }) {
+  const { entries } = useActivityFeed([session]);
+  if (entries === null) {
+    return (
+      <div className="loading compact">
+        <span className="spinner" /> Loading activity…
+      </div>
+    );
+  }
+  return entries.length ? (
+    <ActivityList entries={entries} mint={app.mint} />
+  ) : (
+    <p className="muted small">No requests yet. They appear here within seconds of being served.</p>
+  );
+}
+
+function ActivityModal({ app, session, onClose }: { app: AppData; session: SessionView; onClose: () => void }) {
+  return (
+    <Modal title={`Session #${String(session.data.sessionId)} activity`} onClose={onClose}>
+      <p className="hint">Every request this session served: model, tokens, and cost. Prompts and replies are never stored.</p>
+      <div className="activity-scroll">
+        {rememberedKey(session.address) ? <KeyActivity app={app} session={session} /> : <SignedActivity app={app} session={session} />}
+      </div>
+    </Modal>
+  );
+}
+
 function SessionCard({ session, app, onKey }: { session: SessionView; app: AppData; onKey: () => void }) {
   const { identity, mint, vault, notify, refresh } = app;
   const active = isActive(session);
   const { key, usage } = useSessionUsage(session, active);
   const { busy, run } = useRunner(notify);
+  const [showActivity, setShowActivity] = useState(false);
   const cap = Number(session.data.reservedAmount);
   const spent = usage?.pending ?? 0;
 
@@ -153,7 +197,11 @@ function SessionCard({ session, app, onKey }: { session: SessionView; app: AppDa
         })}
       </div>
 
+      {showActivity ? <ActivityModal app={app} session={session} onClose={() => setShowActivity(false)} /> : null}
       <footer className="session-card-actions">
+        <button className="ghost small" onClick={() => setShowActivity(true)}>
+          Activity
+        </button>
         {active ? (
           <>
             {key ? (
@@ -200,24 +248,28 @@ function SessionCard({ session, app, onKey }: { session: SessionView; app: AppDa
 }
 
 function History({ app }: { app: AppData }) {
-  const { identity, mint, notify } = app;
-  const { busy, run } = useRunner(notify);
-  const [history, setHistory] = useState<RelayerSession[] | null>(null);
-  const settled = history?.filter((entry) => entry.settled_at !== null) ?? [];
-  const load = () => run("history", () => listRelayerSessions(identity), (value) => (setHistory(value.data), null));
+  const { identity, mint } = app;
+  const { data, loading, load, silent } = useSignedData(app, "history", () => listRelayerSessions(identity));
+  const settled = data?.data.filter((entry) => entry.settled_at !== null) ?? [];
 
   return (
     <Panel
       title="Settlement history"
       subtitle="What each closed session actually cost, as settled on-chain."
       actions={
-        <button className="ghost small" disabled={busy !== null} onClick={load}>
-          <Icon name="refresh" size={15} /> {busy ? "Loading…" : history ? "Refresh" : "Load"}
+        <button className="ghost small" disabled={loading} onClick={load}>
+          <Icon name="refresh" size={15} /> {loading ? "Loading…" : data ? "Refresh" : "Load"}
         </button>
       }
     >
-      {!history ? (
-        <p className="muted small">Loading asks your wallet to sign a message, so it only runs when you ask.</p>
+      {!data ? (
+        loading || silent ? (
+          <div className="loading compact">
+            <span className="spinner" /> Loading history…
+          </div>
+        ) : (
+          <p className="muted small">Loading asks your wallet to sign a message, so it only runs when you ask.</p>
+        )
       ) : settled.length === 0 ? (
         <p className="muted small">Nothing settled yet.</p>
       ) : (

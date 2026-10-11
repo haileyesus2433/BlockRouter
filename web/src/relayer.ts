@@ -17,6 +17,18 @@ export type KeyRecord = {
 
 export type UsageLine = { model: string; model_id: number; prompt_tokens: number; completion_tokens: number };
 
+export type ActivityEntry = {
+  id: number;
+  model: string;
+  model_id: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  charge: number;
+  client: string;
+  key_name: string | null;
+  created_at: number;
+};
+
 export type RelayerSession = {
   session: string;
   open: boolean;
@@ -33,10 +45,33 @@ export type RelayerSession = {
   last_error: string | null;
 };
 
+export class RelayerError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | null,
+  ) {
+    super(message);
+  }
+}
+
 async function parse<T>(response: Response): Promise<T> {
-  const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
-  if (!response.ok) throw new Error(body?.error?.message ?? `Relayer returned ${response.status}`);
+  const body = (await response.json().catch(() => null)) as { error?: { message?: string; code?: string } } | null;
+  if (!response.ok) throw new RelayerError(body?.error?.message ?? `Relayer returned ${response.status}`, body?.error?.code ?? null);
   return body as T;
+}
+
+const DEAD_KEY = new Set(["key_revoked", "invalid_api_key"]);
+
+/** Drops a remembered key the relayer no longer accepts, so the page offers a new one instead. */
+export function forgetKeyIfDead(session: string, error: unknown): void {
+  if (!(error instanceof RelayerError) || !error.code || !DEAD_KEY.has(error.code)) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(KEY_STORAGE) ?? "{}");
+    delete all[session];
+    localStorage.setItem(KEY_STORAGE, JSON.stringify(all));
+  } catch {
+    // Storage unavailable; nothing to forget.
+  }
 }
 
 export async function health(): Promise<Health> {
@@ -69,6 +104,8 @@ export const updateKey = (identity: Identity, id: string, maxTokens: number | nu
   signed(identity, "PATCH", `/v1/keys/${id}`, { max_tokens: maxTokens });
 export const listRelayerSessions = (identity: Identity) =>
   signed<{ data: RelayerSession[] }>(identity, "GET", "/v1/sessions");
+export const sessionRequestsSigned = (identity: Identity, session: string) =>
+  signed<{ data: ActivityEntry[] }>(identity, "GET", `/v1/sessions/${session}/requests`);
 export const closeSession = (identity: Identity, session: string) =>
   signed(identity, "POST", `/v1/sessions/${session}/close`);
 
@@ -87,7 +124,7 @@ export async function* streamChat(
   const response = await fetch(`${relayerUrl}/v1/chat/completions`, {
     method: "POST",
     signal,
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-BlockRouter-Source": "playground" },
     body: JSON.stringify({ model, messages, max_tokens: PLAYGROUND_MAX_TOKENS, stream: true, stream_options: { include_usage: true } }),
   });
   if (!response.ok || !response.body) await parse(response);
@@ -153,4 +190,9 @@ export type CurrentSession = {
 /** Live usage through an API key: no wallet signature needed, so it can poll. */
 export async function sessionCurrent(apiKey: string): Promise<CurrentSession> {
   return parse(await fetch(`${relayerUrl}/v1/session/current`, { headers: { Authorization: `Bearer ${apiKey}` } }));
+}
+
+/** A session's request log through its API key; works after settlement too. */
+export async function sessionRequests(apiKey: string, limit = 50): Promise<{ data: ActivityEntry[] }> {
+  return parse(await fetch(`${relayerUrl}/v1/session/requests?limit=${limit}`, { headers: { Authorization: `Bearer ${apiKey}` } }));
 }

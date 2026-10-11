@@ -5,6 +5,7 @@ import { Icon } from "../components/icons";
 import { Choice, CopyButton, Empty, Modal, PageHeader, Panel, useRunner } from "../components/ui";
 import { modelAlias, relayerUrl } from "../config";
 import { type AppData, isActive } from "../context";
+import { useSignedData } from "../hooks";
 import { shortAddress } from "../format";
 import { createKey, type KeyRecord, listKeys, rememberedKey, rememberKey, revokeKey, updateKey } from "../relayer";
 
@@ -218,22 +219,28 @@ function EditKeyModal({ app, record, onClose, onSaved }: { app: AppData; record:
 function AllKeys({ app }: { app: AppData }) {
   const { identity, notify } = app;
   const { busy, run } = useRunner(notify);
-  const [keys, setKeys] = useState<KeyRecord[] | null>(null);
+  const { data, loading, load, silent } = useSignedData(app, "keys", () => listKeys(identity));
+  const keys: KeyRecord[] | null = data?.data ?? null;
   const [editing, setEditing] = useState<KeyRecord | null>(null);
-  const load = () => run("list", () => listKeys(identity), (value) => (setKeys(value.data), null));
 
   return (
     <Panel
       title="All keys"
       subtitle="Every key the relayer holds for this wallet."
       actions={
-        <button className="ghost small" disabled={busy !== null} onClick={load}>
-          <Icon name="refresh" size={15} /> {busy === "list" ? "Loading…" : keys ? "Refresh" : "Load"}
+        <button className="ghost small" disabled={loading} onClick={load}>
+          <Icon name="refresh" size={15} /> {loading ? "Loading…" : keys ? "Refresh" : "Load"}
         </button>
       }
     >
       {!keys ? (
-        <p className="muted small">Loading asks your wallet to sign a message, so it only runs when you ask.</p>
+        loading || silent ? (
+          <div className="loading compact">
+            <span className="spinner" /> Loading keys…
+          </div>
+        ) : (
+          <p className="muted small">Loading asks your wallet to sign a message, so it only runs when you ask.</p>
+        )
       ) : keys.length === 0 ? (
         <p className="muted small">No keys yet.</p>
       ) : (

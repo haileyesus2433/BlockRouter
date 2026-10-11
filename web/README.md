@@ -7,7 +7,10 @@ A browser front end for everything `br` does, plus the client setup that trips p
   reclaim it after expiry. Settlement history links to each transaction.
 - **API keys**: create a key for a session and copy a ready `opencode.json` (key included), the base
   URL for any OpenAI-compatible tool, or a curl command.
-- **Playground**: chat with the session's models; each reply shows what it cost.
+- **Playground**: chat with the session's models; each reply shows what it cost. Chats are saved in
+  this browser per wallet and can be continued on any active session. The relayer never stores them.
+- **Activity**: every request a session served (OpenCode, the playground, curl, any SDK) with its
+  model, tokens, and cost, live on the overview and per session. Prompts and replies are not logged.
 
 ## Run
 
@@ -33,7 +36,8 @@ whose `CORS_ORIGINS` must include the dashboard's origin (the default covers por
   is kept in this browser's storage, so never load a real wallet's key.
 
 Requests to the relayer's key and session endpoints are signed by the wallet, so each one asks for a
-signature. Live usage polls with the session's API key instead, which needs no signature. The page
-only knows API keys created in this browser.
+signature. Live usage and activity poll with the session's API key instead, which needs no signature. The page
+only knows API keys created in this browser; for other sessions, activity loads with a signature.
+Signed results are kept while the page is open, and the demo wallet loads them without asking.
 
 Session expiry is judged by the chain clock, not this machine's, since local validators drift.

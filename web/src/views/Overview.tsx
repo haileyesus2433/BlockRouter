@@ -1,11 +1,12 @@
 import { type ReactNode, useState } from "react";
 
+import { ActivityList } from "../components/Activity";
 import { Icon } from "../components/icons";
 import { Choice, Meter, Modal, PageHeader, Panel, useRunner } from "../components/ui";
 import { cluster, modelAlias } from "../config";
 import { type AppData, isActive } from "../context";
 import { formatUnits, parseAmount, timeLeft } from "../format";
-import { useSessionUsage } from "../hooks";
+import { useActivityFeed, useSessionUsage } from "../hooks";
 import { rpc } from "../identity";
 import { rememberedKey } from "../relayer";
 import { deposit, withdraw } from "../tx";
@@ -118,6 +119,29 @@ function SessionRow({ session, app }: { session: SessionView; app: AppData }) {
       </div>
       <span className="muted small nowrap">{timeLeft(session.data.expiresAt)}</span>
     </button>
+  );
+}
+
+function LiveActivity({ app, sessions }: { app: AppData; sessions: SessionView[] }) {
+  const { entries, tracked } = useActivityFeed(sessions, 20);
+  return (
+    <Panel
+      title="Live activity"
+      subtitle="Requests from OpenCode, the playground, or any tool using your keys. Prompts and replies are never stored."
+      actions={tracked > 0 ? <span className="live-pill">Live</span> : null}
+    >
+      {tracked === 0 ? (
+        <p className="muted small">Create a key in this browser and requests show up here as they happen.</p>
+      ) : entries === null ? (
+        <div className="loading compact">
+          <span className="spinner" /> Loading activity…
+        </div>
+      ) : entries.length === 0 ? (
+        <p className="muted small">No requests yet. Point a tool at your key and they appear here within seconds.</p>
+      ) : (
+        <ActivityList entries={entries.slice(0, 12)} mint={app.mint} showSession />
+      )}
+    </Panel>
   );
 }
 
@@ -269,6 +293,8 @@ export function Overview({ app }: { app: AppData }) {
           )}
         </Panel>
       </div>
+
+      <LiveActivity app={app} sessions={active} />
 
       {transfer ? <TransferModal app={app} initial={transfer} onClose={() => setTransfer(null)} /> : null}
     </>

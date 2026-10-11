@@ -69,6 +69,8 @@ export function App() {
     return null;
   }, [demo, connected]);
 
+  const cache = useMemo(() => new Map<string, unknown>(), [identity?.address]);
+
   useEffect(() => {
     if (!deployment) return;
     const mintAddress = mintChoice === "usdt" ? deployment.mockUsdtMint : deployment.usdcMint;
@@ -91,8 +93,10 @@ export function App() {
     try {
       syncChainClock(await readChainTime());
       const view = await readVault(identity.address, mint);
+      const list = view.exists ? await listSessions(view.key) : [];
+      // Set together so no page ever renders a vault without its sessions.
+      setSessions(list);
       setVault(view);
-      setSessions(view.exists ? await listSessions(view.key) : []);
       setLoadError(null);
     } catch (error) {
       setLoadError(errorMessage(error));
@@ -139,7 +143,7 @@ export function App() {
   }
 
   const app: AppData | null =
-    mint && vault ? { identity, mint, vault, sessions, relayer: relayer ? address(relayer.relayer) : null, refresh, notify, go } : null;
+    mint && vault ? { identity, mint, vault, sessions, relayer: relayer ? address(relayer.relayer) : null, refresh, notify, go, cache } : null;
   const activeCount = sessions.filter(isActive).length;
 
   return (
