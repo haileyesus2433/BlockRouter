@@ -57,7 +57,7 @@ export class SettlementWorker {
 
   private trigger(usage: UsageRecord, session: SessionState, pending: bigint, now: bigint): Trigger | null {
     const { config } = this.deps;
-    if (session.expiresAt - now <= BigInt(config.settleBeforeExpirySecs)) return "expiry";
+    if (session.expiresAt - now <= expiryWindow(config, session, usage)) return "expiry";
     if (usage.closeRequested) return "close";
     if (pending * BPS >= session.reservedAmount * BigInt(config.settleThresholdBps)) return "threshold";
     if (config.settleIntervalSecs > 0 && this.deps.nowSecs() - usage.firstUsageAt >= config.settleIntervalSecs) {
@@ -175,4 +175,16 @@ function fitLine(
   }
   const fit = rates.completionRate === 0n ? completionTokens : (limit - promptCost) / rates.completionRate;
   return { promptTokens, completionTokens: fit < completionTokens ? fit : completionTokens };
+}
+
+// A fixed window would settle short sessions on their first request. Use the configured window,
+// capped at a quarter of the life the session had at first use, but never shorter than it takes
+// the worker to notice and land a settlement.
+export function expiryWindow(config: Config, session: SessionState, usage: UsageRecord): bigint {
+  const floor = BigInt(config.workerTickSecs * 2 + 30);
+  const lifetimeAtFirstUse = session.expiresAt - BigInt(usage.firstUsageAt);
+  const quarter = lifetimeAtFirstUse > 0n ? lifetimeAtFirstUse / 4n : 0n;
+  const window = BigInt(config.settleBeforeExpirySecs);
+  const scaled = quarter < window ? quarter : window;
+  return scaled > floor ? scaled : floor;
 }

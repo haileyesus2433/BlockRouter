@@ -48,10 +48,11 @@ test("settles raw token counts once pending usage reaches the threshold", async 
   assert.equal((await worker.tick()).size, 0, "settled sessions are not retried");
 });
 
-test("settles before expiry even below the threshold", async () => {
+test("settles a long session before expiry even below the threshold", async () => {
   const { chain, deps, worker } = setup({ settleBeforeExpirySecs: 600 });
   const session = openSession(chain, randomAddress(), { expiresAt: chain.clock.now + 600n });
-  deps.store.addUsage(session.address, 1, 10, 10, 0, NOW_SECS);
+  // First used a day ago, so the full configured window applies.
+  deps.store.addUsage(session.address, 1, 10, 10, 0, NOW_SECS - 86_400);
   assert.equal((await worker.tick()).get(session.address)?.status, "settled");
 });
 
@@ -178,3 +179,24 @@ test("overrun usage is trimmed line by line to the largest billable amount, neve
 });
 
 const ratesOf = (m: ReturnType<typeof model>) => ({ promptRate: m.promptRate, completionRate: m.completionRate });
+
+test("the expiry window scales with the session so short sessions are not settled on first use", async () => {
+  const { expiryWindow } = await import("../src/worker");
+  const config = testConfig({ settleBeforeExpirySecs: 600, workerTickSecs: 15 });
+  const usageAt = (firstUsageAt: number) => ({ firstUsageAt }) as Parameters<typeof expiryWindow>[2];
+  const sessionUntil = (expiresAt: bigint) => ({ expiresAt }) as Parameters<typeof expiryWindow>[1];
+
+  // A day-long session keeps the configured 10 minutes.
+  assert.equal(expiryWindow(config, sessionUntil(BigInt(NOW_SECS + 86_400)), usageAt(NOW_SECS)), 600n);
+  // A 20-minute session gets a quarter of it.
+  assert.equal(expiryWindow(config, sessionUntil(BigInt(NOW_SECS + 1_200)), usageAt(NOW_SECS)), 300n);
+  // A 2-minute session gets the floor: two ticks plus 30 seconds.
+  assert.equal(expiryWindow(config, sessionUntil(BigInt(NOW_SECS + 120)), usageAt(NOW_SECS)), 60n);
+
+  const { chain, deps, worker } = setup({ settleBeforeExpirySecs: 600, workerTickSecs: 15 });
+  const short = openSession(chain, randomAddress(), { expiresAt: chain.clock.now + 120n });
+  deps.store.addUsage(short.address, 1, 10, 10, 0, NOW_SECS);
+  assert.equal((await worker.tick()).get(short.address)?.status, "skipped", "not settled on first use");
+  chain.clock.now += 61n;
+  assert.equal((await worker.tick()).get(short.address)?.status, "settled", "settled inside the final minute");
+});
