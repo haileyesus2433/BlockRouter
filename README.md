@@ -22,13 +22,13 @@ withdraw everything you did not spend.
 ## How it works
 
 1. **Deposit** USDC or USDT into your vault. Only you can withdraw from it.
-2. **Open a session** that reserves a cap (say 5 USDT) for one relayer and one model, for a fixed
-   time. Reserved funds cannot be withdrawn while the session is open, and nothing else can touch
+2. **Open a session** that reserves a cap (say 5 USDT) for one relayer and up to 8 models, for a
+   fixed time. Reserved funds cannot be withdrawn while the session is open, and nothing else can touch
    them.
 3. **Create an API key** bound to that session and point any OpenAI-compatible client at the
    relayer. A leaked key can spend at most the session's cap, never your balance.
-4. **The relayer settles** by submitting raw token counts. The program prices them from the on-chain
-   model rates, pays the provider, and releases the rest of the reservation back to your vault.
+4. **The relayer settles** by submitting raw token counts per model. The program prices each model
+   at its on-chain rate, pays the provider, and releases the rest of the reservation back to your vault.
 5. **Withdraw** anything left. If the relayer never settles, reclaim the session after it expires.
 
 ## Trust boundary
@@ -37,7 +37,7 @@ The program enforces:
 
 - the most a session can spend (its reservation)
 - the rate charged per token, from the on-chain model registry (increases are timelocked)
-- which model a session can be billed for
+- which models a session can be billed for
 - which relayer may settle a session
 - that the payout goes only to the configured provider
 - that unspent reservations return to the payer, and that withdraw and reclaim keep working while

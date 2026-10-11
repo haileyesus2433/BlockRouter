@@ -164,7 +164,7 @@ export function openSession(chain: FakeChain, owner: Address, overrides: Partial
     reservedAmount: 5_000_000n,
     sessionId: BigInt(sessionCounter),
     expiresAt: chain.clock.now + 86_400n,
-    modelId: 1,
+    allowedModels: [1],
     ...overrides,
   };
   chain.sessions.set(session.address, session);

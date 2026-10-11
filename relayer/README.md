@@ -65,7 +65,8 @@ messages: 401 `invalid_api_key` / `key_revoked`, 402 `no_active_session` / `sess
 
 ## Billing
 
-- A key is bound to one session, so a leaked key costs at most that session's cap.
+- A key is bound to one session, so a leaked key costs at most that session's cap. A session allows
+  up to 8 models; requests for any of them draw on the same cap, each at its own rate.
 - Pre-flight clamps `max_tokens` to what the session can still afford, priced at the higher of the
   current and any pending (timelocked) rate. The maximum is held while the request is in flight, so
   concurrent requests cannot overspend.

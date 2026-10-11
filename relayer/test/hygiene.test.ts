@@ -60,7 +60,7 @@ test("settlement errors are redacted before they are logged or stored", async ()
   const chain = fakeChain();
   const deps = testDeps({ chain, config: testConfig({ settleThresholdBps: 1 }) });
   const session = openSession(chain, randomAddress());
-  deps.store.addUsage(session.address, 1_000_000, 0, 0, NOW_SECS);
+  deps.store.addUsage(session.address, 1, 1_000_000, 0, 0, NOW_SECS);
   chain.failSettle = new Error(`request to https://rpc.example.com/?api-key=${SECRET} failed`);
   const worker = new SettlementWorker({ ...deps, redact: createRedactor([`https://rpc.example.com/?api-key=${SECRET}`]) });
 

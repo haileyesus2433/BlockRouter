@@ -12,6 +12,8 @@ import {
   fixEncoderSize,
   getAddressDecoder,
   getAddressEncoder,
+  getArrayDecoder,
+  getArrayEncoder,
   getBytesEncoder,
   getConstantDecoder,
   getConstantEncoder,
@@ -19,16 +21,20 @@ import {
   getHiddenPrefixEncoder,
   getStructDecoder,
   getStructEncoder,
-  getU16Decoder,
-  getU16Encoder,
   getU64Decoder,
   getU64Encoder,
   type Address,
-  type FixedSizeCodec,
-  type FixedSizeDecoder,
-  type FixedSizeEncoder,
+  type Codec,
+  type Decoder,
+  type Encoder,
   type ReadonlyUint8Array,
 } from "@solana/kit";
+import {
+  getModelUsageDecoder,
+  getModelUsageEncoder,
+  type ModelUsage,
+  type ModelUsageArgs,
+} from "../types";
 
 export const USAGE_SETTLED_EVENT_DISCRIMINATOR: ReadonlyUint8Array =
   new Uint8Array([34, 78, 6, 42, 206, 77, 112, 167]);
@@ -46,7 +52,8 @@ export type UsageSettledEvent = {
   charge: bigint;
   promptTokens: bigint;
   completionTokens: bigint;
-  modelId: number;
+  /** Per-model raw token counts that produced the charge. */
+  usage: Array<ModelUsage>;
   unusedReleased: bigint;
 };
 
@@ -57,12 +64,13 @@ export type UsageSettledEventArgs = {
   charge: number | bigint;
   promptTokens: number | bigint;
   completionTokens: number | bigint;
-  modelId: number;
+  /** Per-model raw token counts that produced the charge. */
+  usage: Array<ModelUsageArgs>;
   unusedReleased: number | bigint;
 };
 
 /** Gets the encoder for {@link UsageSettledEventArgs} event data. */
-export function getUsageSettledEventEncoder(): FixedSizeEncoder<UsageSettledEventArgs> {
+export function getUsageSettledEventEncoder(): Encoder<UsageSettledEventArgs> {
   return getHiddenPrefixEncoder(
     getStructEncoder([
       ["session", getAddressEncoder()],
@@ -71,7 +79,7 @@ export function getUsageSettledEventEncoder(): FixedSizeEncoder<UsageSettledEven
       ["charge", getU64Encoder()],
       ["promptTokens", getU64Encoder()],
       ["completionTokens", getU64Encoder()],
-      ["modelId", getU16Encoder()],
+      ["usage", getArrayEncoder(getModelUsageEncoder())],
       ["unusedReleased", getU64Encoder()],
     ]),
     [getConstantEncoder(USAGE_SETTLED_EVENT_DISCRIMINATOR)],
@@ -79,7 +87,7 @@ export function getUsageSettledEventEncoder(): FixedSizeEncoder<UsageSettledEven
 }
 
 /** Gets the decoder for {@link UsageSettledEvent} event data. */
-export function getUsageSettledEventDecoder(): FixedSizeDecoder<UsageSettledEvent> {
+export function getUsageSettledEventDecoder(): Decoder<UsageSettledEvent> {
   return getHiddenPrefixDecoder(
     getStructDecoder([
       ["session", getAddressDecoder()],
@@ -88,7 +96,7 @@ export function getUsageSettledEventDecoder(): FixedSizeDecoder<UsageSettledEven
       ["charge", getU64Decoder()],
       ["promptTokens", getU64Decoder()],
       ["completionTokens", getU64Decoder()],
-      ["modelId", getU16Decoder()],
+      ["usage", getArrayDecoder(getModelUsageDecoder())],
       ["unusedReleased", getU64Decoder()],
     ]),
     [getConstantDecoder(USAGE_SETTLED_EVENT_DISCRIMINATOR)],
@@ -96,7 +104,7 @@ export function getUsageSettledEventDecoder(): FixedSizeDecoder<UsageSettledEven
 }
 
 /** Gets the codec for {@link UsageSettledEvent} event data. */
-export function getUsageSettledEventCodec(): FixedSizeCodec<
+export function getUsageSettledEventCodec(): Codec<
   UsageSettledEventArgs,
   UsageSettledEvent
 > {

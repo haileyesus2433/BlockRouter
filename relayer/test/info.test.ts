@@ -55,12 +55,14 @@ test("session/current reports cap, pending usage, and remaining budget", async (
   const { app, chain, deps } = setup();
   const session = openSession(chain, randomAddress(), { reservedAmount: 1_000_000n });
   const key = issueKey(deps, session);
-  deps.store.addUsage(session.address, 1_000, 500, 1_100, NOW_SECS);
+  deps.store.addUsage(session.address, 1, 1_000, 500, 1_100, NOW_SECS);
 
   const { status, body } = await get(app, "/v1/session/current", key);
   assert.equal(status, 200);
   assert.equal(body.session, session.address);
-  assert.equal(body.model, "deepseek-v3");
+  assert.deepEqual(body.models, ["deepseek-v3"]);
+  assert.deepEqual(body.model_ids, [1]);
+  assert.deepEqual(body.usage, [{ model: "deepseek-v3", model_id: 1, prompt_tokens: 1_000, completion_tokens: 500 }]);
   assert.equal(body.cap, 1_000_000);
   // 1_000 * 270_000 / 1e6 + 500 * 1_100_000 / 1e6
   assert.equal(body.pending, 820);
@@ -74,7 +76,7 @@ test("pending usage is priced at the higher pending rate during a timelock", asy
   chain.models.set(1, model(1, { pendingPromptRate: 540_000n, pendingCompletionRate: 1_100_000n, effectiveAt: chain.clock.now + 3_600n }));
   const session = openSession(chain, randomAddress());
   const key = issueKey(deps, session);
-  deps.store.addUsage(session.address, 1_000_000, 0, 1_000_000, NOW_SECS);
+  deps.store.addUsage(session.address, 1, 1_000_000, 0, 1_000_000, NOW_SECS);
   const { body } = await get(app, "/v1/session/current", key);
   assert.equal(body.pending, 540_000);
 });
@@ -89,7 +91,7 @@ test("session/current explains closed, settled, expired, and inactive-model sess
 
   const settled = openSession(chain, randomAddress());
   const settledKey = issueKey(deps, settled);
-  deps.store.addUsage(settled.address, 1, 1, 1, NOW_SECS);
+  deps.store.addUsage(settled.address, 1, 1, 1, 1, NOW_SECS);
   deps.store.markSettled(settled.address, "sig", NOW_SECS);
   const settledResponse = await get(app, "/v1/session/current", settledKey);
   assert.equal(settledResponse.status, 402);
@@ -99,8 +101,15 @@ test("session/current explains closed, settled, expired, and inactive-model sess
   assert.equal((await get(app, "/v1/session/current", issueKey(deps, expired))).body.error.code, "session_expired");
 
   chain.models.set(2, model(2, { isActive: false }));
-  const inactive = openSession(chain, randomAddress(), { modelId: 2 });
-  const inactiveResponse = await get(app, "/v1/session/current", issueKey(deps, inactive));
-  assert.equal(inactiveResponse.status, 404);
-  assert.equal(inactiveResponse.body.error.code, "model_not_found");
+  const inactive = openSession(chain, randomAddress(), { allowedModels: [2] });
+  // The session itself stays readable; requests for the inactive model are refused.
+  const inactiveKey = issueKey(deps, inactive);
+  assert.equal((await get(app, "/v1/session/current", inactiveKey)).status, 200);
+  const chat = await app.request("/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${inactiveKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "llama-3.3-70b", messages: [{ role: "user", content: "hi" }] }),
+  });
+  assert.equal(chat.status, 404);
+  assert.equal(((await chat.json()) as any).error.code, "model_not_found");
 });

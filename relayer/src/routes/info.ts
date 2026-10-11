@@ -35,19 +35,25 @@ export function infoRoutes(deps: Deps) {
   routes.get("/session/current", async (c) => {
     const key = verifyApiKey(deps.store, c.req.header("Authorization"));
     const active = await deps.ledger.resolve(key);
-    const { session, alias, usage } = active;
+    const { session, usage } = active;
     return c.json({
       session: session.address,
       vault: session.vault,
       relayer: session.relayer,
-      model: alias.alias,
-      model_id: session.modelId,
+      models: deps.ledger.allowedAliases(active),
+      model_ids: session.allowedModels,
       cap: jsonInt(session.reservedAmount),
-      pending: jsonInt(deps.ledger.pendingCharge(usage, active.model)),
+      pending: jsonInt(deps.ledger.pendingCharge(usage, active.models)),
       held: jsonInt(deps.ledger.held(session.address)),
       remaining: jsonInt(deps.ledger.remaining(active)),
       prompt_tokens: jsonInt(usage?.promptTokens ?? 0n),
       completion_tokens: jsonInt(usage?.completionTokens ?? 0n),
+      usage: (usage?.models ?? []).map((line) => ({
+        model: deps.ledger.aliasFor(line.modelId)?.alias ?? `model ${line.modelId}`,
+        model_id: line.modelId,
+        prompt_tokens: jsonInt(line.promptTokens),
+        completion_tokens: jsonInt(line.completionTokens),
+      })),
       requests: usage?.requests ?? 0,
       expires_at: jsonInt(session.expiresAt),
     });

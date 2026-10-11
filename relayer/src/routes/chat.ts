@@ -6,12 +6,10 @@ import type { Deps } from "../app";
 import { verifyApiKey } from "../auth";
 import {
   invalidRequest,
-  modelNotAllowed,
-  modelNotFound,
   sessionCapExhausted,
   upstreamError,
 } from "../errors";
-import { type ActiveSession, jsonInt, worstCaseRates } from "../ledger";
+import { type ActiveSession, jsonInt, type ModelChoice, worstCaseRates } from "../ledger";
 import { charge, type Rates } from "../pricing";
 import {
   type ChatMessage,
@@ -175,15 +173,11 @@ export function chatRoutes(deps: Deps) {
     limiter.check([`key:${key.id}`, `session:${key.sessionPubkey}`], deps.nowSecs());
     const body = parseBody(await c.req.json().catch(() => null));
     const active = await deps.ledger.resolve(key);
+    const choice = deps.ledger.choose(active, body.model);
 
-    if (body.model !== active.alias.alias) {
-      if (!deps.config.models.some((model) => model.alias === body.model)) throw modelNotFound(body.model);
-      throw modelNotAllowed(body.model, [active.alias.alias]);
-    }
-
-    const rates = worstCaseRates(active.model);
+    const rates = worstCaseRates(choice.model);
     const request: ChatRequest = {
-      model: active.alias.upstream,
+      model: choice.alias.upstream,
       messages: body.messages,
       maxTokens: body.maxTokens ?? key.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
       tools: body.tools,
@@ -202,16 +196,23 @@ export function chatRoutes(deps: Deps) {
     const hold = maxCost(paddedPrompt, BigInt(request.maxTokens), rates);
     deps.ledger.hold(sessionKey, hold);
 
-    const before = deps.ledger.pendingCharge(active.usage, active.model);
+    const before = deps.ledger.pendingCharge(active.usage, active.models);
     let released = false;
     const settle = (usage: Usage | null) => {
       if (released) return 0n;
       released = true;
       deps.ledger.release(sessionKey, hold);
       if (!usage) return 0n;
-      deps.store.addUsage(sessionKey, usage.promptTokens, usage.completionTokens, estimatedPrompt, deps.nowSecs());
-      const after = deps.ledger.pendingCharge(deps.store.getUsage(sessionKey), active.model);
-      log(active, usage, estimatedPrompt, after - before);
+      deps.store.addUsage(
+        sessionKey,
+        choice.alias.id,
+        usage.promptTokens,
+        usage.completionTokens,
+        estimatedPrompt,
+        deps.nowSecs(),
+      );
+      const after = deps.ledger.pendingCharge(deps.store.getUsage(sessionKey), active.models);
+      log(active, choice, usage, estimatedPrompt, after - before);
       return after - before;
     };
 
@@ -347,12 +348,12 @@ export function chatRoutes(deps: Deps) {
 }
 
 // Metadata and token counts only. Prompt and completion content is never logged.
-function log(active: ActiveSession, usage: Usage, estimatedPrompt: number, charged: bigint) {
+function log(active: ActiveSession, choice: ModelChoice, usage: Usage, estimatedPrompt: number, charged: bigint) {
   console.log(
     JSON.stringify({
       event: "usage",
       session: active.session.address,
-      model: active.alias.alias,
+      model: choice.alias.alias,
       prompt_tokens: usage.promptTokens,
       completion_tokens: usage.completionTokens,
       estimated_prompt_tokens: estimatedPrompt,

@@ -36,7 +36,7 @@ br vault withdraw 2.5
 br vault withdraw all                       # everything not reserved by a session
 br vault status                             # balance, reserved, available
 
-br session open --cap 5 --model deepseek-v3 [--hours 24 | --minutes 30] [--relayer <address>]
+br session open --cap 5 --model deepseek-v3,llama-3.3-70b [--hours 24 | --minutes 30] [--relayer <address>]
 br session status                           # open sessions on your vault
 br session reclaim [id]                     # release expired, unsettled sessions
 
@@ -49,6 +49,9 @@ br key revoke <id>
 `--max-tokens` is the response length the relayer uses when a client does not send `max_tokens`
 (OpenCode does not). Raise it if long file writes get cut off. It is still clamped to what the
 session can afford.
+
+A session can allow up to 8 models. One cap is shared across them, and clients can switch between
+them freely; each model is billed at its own on-chain rate.
 
 Amounts are whole tokens (`2.5` means 2.5 USDT). `--mint` defaults to the cluster's mock USDT.
 Program errors are decoded, for example `Session has not expired yet (program error 6015)`.
