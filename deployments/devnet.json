@@ -2,7 +2,7 @@
   "cluster": "devnet",
   "programId": "7maTNWbtCpuCXeRUVCNDR2a9YU7kaeUqtvrqz4ustyyi",
   "usdcMint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
-  "mockUsdtMint": null,
+  "mockUsdtMint": "FuLjr7GLgaa6Ciz24YPE1BQdJbmJXRp3AihgPSyEwmb7",
   "relayer": null,
   "relayerUrl": null,
   "config": {
