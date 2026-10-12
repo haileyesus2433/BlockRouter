@@ -2088,15 +2088,20 @@ tr:last-child td {
   white-space: nowrap;
 }
 
-.theme-switch .choice {
-  display: grid;
-  place-items: center;
-  padding: 6px 10px;
-}
-
-.theme-switch.corner {
+.theme-corner {
   position: fixed;
   top: 16px;
   right: 16px;
   z-index: 30;
+  padding: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.account {
+  gap: 6px;
+}
+
+.account .icon-button {
+  padding: 5px;
 }

@@ -138,7 +138,7 @@ export function App() {
   if (!identity) {
     return (
       <>
-        <ThemeSwitch className="corner" />
+        <ThemeSwitch className="icon-button theme-corner" />
         <Connect onDemo={setDemo} />
         <Toasts toasts={toasts} dismiss={dismiss} />
       </>
@@ -177,16 +177,13 @@ export function App() {
               onChange={setMintChoice}
             />
           </div>
-          <div className="sidebar-section">
-            <span className="sidebar-label">Theme</span>
-            <ThemeSwitch />
-          </div>
           <div className="account">
             <span className="account-avatar">{identity.address.slice(0, 2)}</span>
             <div className="account-text">
               <strong>{identity.kind === "demo" ? "Demo wallet" : identity.label}</strong>
               <span className="mono muted small">{shortAddress(identity.address)}</span>
             </div>
+            <ThemeSwitch />
             <button className="icon-button" onClick={disconnect} aria-label="Disconnect" title="Disconnect">
               <Icon name="logout" />
             </button>

@@ -1,30 +1,25 @@
-import { type ThemeChoice, useTheme } from "../theme";
-import { Icon, type IconName } from "./icons";
+import { useEffect, useState } from "react";
 
-const OPTIONS: { value: ThemeChoice; label: string; icon: IconName }[] = [
-  { value: "light", label: "Light", icon: "sun" },
-  { value: "dark", label: "Dark", icon: "moon" },
-  { value: "system", label: "System", icon: "monitor" },
-];
+import { useTheme } from "../theme";
+import { Icon } from "./icons";
 
-export function ThemeSwitch({ className = "" }: { className?: string }) {
+const darkQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
+
+/** Flips between light and dark; until clicked, the theme follows the system setting. */
+export function ThemeSwitch({ className = "icon-button" }: { className?: string }) {
   const [theme, setTheme] = useTheme();
+  const [systemDark, setSystemDark] = useState(() => darkQuery().matches);
+  useEffect(() => {
+    const query = darkQuery();
+    const onChange = () => setSystemDark(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  const dark = theme === "dark" || (theme === "system" && systemDark);
+  const label = dark ? "Switch to light theme" : "Switch to dark theme";
   return (
-    <div className={`choices theme-switch ${className}`} role="radiogroup" aria-label="Theme">
-      {OPTIONS.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="radio"
-          aria-checked={theme === option.value}
-          aria-label={option.label}
-          title={option.label}
-          className={theme === option.value ? "choice active" : "choice"}
-          onClick={() => setTheme(option.value)}
-        >
-          <Icon name={option.icon} size={16} />
-        </button>
-      ))}
-    </div>
+    <button className={className} onClick={() => setTheme(dark ? "light" : "dark")} aria-label={label} title={label}>
+      <Icon name={dark ? "sun" : "moon"} />
+    </button>
   );
 }
