@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { listSessions, loadMint, type MintInfo, readChainTime, readVault, type SessionView, type VaultView } from "./chain";
 import { Connect } from "./components/Connect";
+import { ThemeSwitch } from "./components/ThemeSwitch";
 import { Icon, type IconName, Logo } from "./components/icons";
 import { Choice, Toasts, useToasts } from "./components/ui";
 import { cluster, deployment, relayerUrl } from "./config";
@@ -137,6 +138,7 @@ export function App() {
   if (!identity) {
     return (
       <>
+        <ThemeSwitch className="icon-button theme-corner" />
         <Connect onDemo={setDemo} />
         <Toasts toasts={toasts} dismiss={dismiss} />
       </>
@@ -175,20 +177,13 @@ export function App() {
               onChange={setMintChoice}
             />
           </div>
-          <div className="status-list">
-            <span className="status-line">
-              <span className="dot ok" /> {cluster}
-            </span>
-            <span className="status-line" title={relayerUrl}>
-              <span className={relayer ? "dot ok" : "dot bad"} /> {relayer ? "Relayer online" : "Relayer offline"}
-            </span>
-          </div>
           <div className="account">
             <span className="account-avatar">{identity.address.slice(0, 2)}</span>
             <div className="account-text">
               <strong>{identity.kind === "demo" ? "Demo wallet" : identity.label}</strong>
               <span className="mono muted small">{shortAddress(identity.address)}</span>
             </div>
+            <ThemeSwitch />
             <button className="icon-button" onClick={disconnect} aria-label="Disconnect" title="Disconnect">
               <Icon name="logout" />
             </button>

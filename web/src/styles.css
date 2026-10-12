@@ -29,8 +29,9 @@
   color-scheme: light;
 }
 
+/* Dark follows the OS unless the person picked light; an explicit dark choice wins either way. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #09090e;
     --surface: #121219;
     --surface-2: #181821;
@@ -56,6 +57,33 @@
     --hero: linear-gradient(135deg, #3b2fc9 0%, #5b3fd6 45%, #8a3fd9 100%);
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #09090e;
+  --surface: #121219;
+  --surface-2: #181821;
+  --surface-3: #20202b;
+  --border: #23232e;
+  --border-strong: #30303d;
+  --text: #ececf4;
+  --muted: #8a8ca0;
+  --accent: #8b7cff;
+  --accent-hover: #9d90ff;
+  --accent-text: #0b0b12;
+  --accent-soft: #1d1a36;
+  --accent-line: #3a3370;
+  --ok: #3dd49b;
+  --ok-soft: #10261e;
+  --bad: #ff6b6b;
+  --bad-soft: #2c1416;
+  --warn: #f2b84b;
+  --warn-soft: #2a2010;
+  --shadow-sm: none;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset;
+  --shadow-lg: 0 24px 64px -12px rgb(0 0 0 / 0.7);
+  --hero: linear-gradient(135deg, #3b2fc9 0%, #5b3fd6 45%, #8a3fd9 100%);
+  color-scheme: dark;
 }
 
 * {
@@ -519,38 +547,6 @@ details[open] summary {
 
 .sidebar-section .choice {
   flex: 1;
-}
-
-.status-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0 8px;
-  font-size: 0.84rem;
-  color: var(--muted);
-}
-
-.status-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.dot.ok {
-  background: var(--ok);
-  box-shadow: 0 0 0 3px var(--ok-soft);
-}
-
-.dot.bad {
-  background: var(--bad);
-  box-shadow: 0 0 0 3px var(--bad-soft);
 }
 
 .account {
@@ -1775,9 +1771,18 @@ tr:last-child td {
   }
 
   .sidebar-label,
-  .status-list,
   .account-text {
     display: none;
+  }
+
+  .sidebar-foot .choices {
+    flex-wrap: nowrap;
+    padding: 3px;
+  }
+
+  .sidebar-section .choice {
+    flex: none;
+    padding: 5px 9px;
   }
 
   .account {
@@ -2081,4 +2086,22 @@ tr:last-child td {
   font-weight: 600;
   color: inherit;
   white-space: nowrap;
+}
+
+.theme-corner {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  padding: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.account {
+  gap: 6px;
+}
+
+.account .icon-button {
+  padding: 5px;
 }

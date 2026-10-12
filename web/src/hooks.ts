@@ -62,10 +62,8 @@ export function useActivityFeed(sessions: SessionView[], limit = 50) {
   return { entries, tracked: withKeys.length };
 }
 
-/**
- * Data behind a wallet-signed endpoint. Results are cached for the page's lifetime so revisiting a
- * page shows them at once; the demo wallet signs silently, so it loads without asking.
- */
+// Data behind a wallet-signed endpoint, cached for the page's lifetime so revisits are instant.
+// The local demo wallet signs silently, so it loads without asking.
 export function useSignedData<T>(app: AppData, cacheKey: string, loader: () => Promise<T>) {
   const [data, setData] = useState<T | null>(() => (app.cache.get(cacheKey) as T | undefined) ?? null);
   const { busy, run } = useRunner(app.notify);
