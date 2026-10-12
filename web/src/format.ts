@@ -44,7 +44,22 @@ export function ratePerMillion(rate: number, decimals = 6): string {
   return `$${(rate / 10 ** decimals).toFixed(2)}`;
 }
 
+// Relayer error codes in words that fit the app, instead of the relayer's CLI-oriented hints.
+const RELAYER_ERRORS: Record<string, string> = {
+  no_active_session: "This session has ended. Open a new session and create a key for it.",
+  session_expired: "This session has ended. Open a new session and create a key for it.",
+  session_cap_exhausted: "This session's cap is used up. Open a new session to keep going.",
+  model_not_allowed: "That model is not part of this session.",
+  model_not_found: "That model is not available right now.",
+  upstream_error: "The model provider could not serve this request, so nothing was charged. Try again or pick another model.",
+  rate_limit_exceeded: "Too many requests at once. Wait a moment and try again.",
+  invalid_api_key: "This API key no longer works. Create a new one.",
+  key_revoked: "This API key was revoked. Create a new one.",
+};
+
 export function errorMessage(error: unknown): string {
+  const relayerCode = (error as { code?: unknown } | null)?.code;
+  if (typeof relayerCode === "string" && RELAYER_ERRORS[relayerCode]) return RELAYER_ERRORS[relayerCode];
   let current: unknown = error;
   while (current instanceof Error) {
     const code = (current as { context?: { code?: unknown } }).context?.code;

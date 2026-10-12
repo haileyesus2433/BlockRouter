@@ -51,7 +51,8 @@ export function App() {
   const [view, go] = useView();
   const [demo, setDemo] = useState<Identity | null>(null);
   const [relayer, setRelayer] = useState<Health | null>(null);
-  const [mintChoice, setMintChoice] = useState<"usdt" | "usdc">(deployment?.mockUsdtMint ? "usdt" : "usdc");
+  // Devnet users can get USDC from Circle's faucet, while mock USDT exists only on the local chain.
+  const [mintChoice, setMintChoice] = useState<"usdt" | "usdc">(cluster === "localnet" && deployment?.mockUsdtMint ? "usdt" : "usdc");
   const [mint, setMint] = useState<MintInfo | null>(null);
   const [vault, setVault] = useState<VaultView | null>(null);
   const [sessions, setSessions] = useState<SessionView[]>([]);
@@ -120,13 +121,13 @@ export function App() {
     setSessions([]);
   }
 
-  if (!deployment) {
+  if (!deployment || !relayerUrl) {
     return (
       <div className="center-screen">
         <div className="panel narrow">
-          <h2>No deployment for {cluster}</h2>
+          <h2>BlockRouter is not available</h2>
           <p className="muted">
-            Run the seed script so <code>deployments/{cluster}.json</code> exists, then reload.
+            This site is missing its {deployment ? "relayer address" : `${cluster} deployment`}. Please try again later.
           </p>
         </div>
       </div>

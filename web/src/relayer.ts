@@ -141,7 +141,7 @@ export async function* streamChat(
       const data = line.startsWith("data:") ? line.slice(5).trim() : "";
       if (!data || data === "[DONE]") continue;
       const event = JSON.parse(data);
-      if (event.error) throw new Error(event.error.message);
+      if (event.error) throw new RelayerError(event.error.message, event.error.code ?? null);
       const text = event.choices?.[0]?.delta?.content;
       if (typeof text === "string" && text) yield { kind: "delta", text };
       if (event.usage) {

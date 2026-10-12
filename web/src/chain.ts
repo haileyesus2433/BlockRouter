@@ -9,6 +9,7 @@ import {
   type Session,
 } from "@blockrouter/client";
 
+import { cluster } from "./config";
 import { rpc } from "./identity";
 
 export type MintInfo = { address: Address; label: string; decimals: number; tokenProgram: Address };
@@ -26,7 +27,7 @@ export async function readChainTime(): Promise<number> {
 
 export async function loadMint(mint: Address, label: string): Promise<MintInfo> {
   const { value } = await rpc.getAccountInfo(mint, { encoding: "base64" }).send();
-  if (!value) throw new Error(`Mint ${mint} not found on this cluster. Did you run the seed script?`);
+  if (!value) throw new Error(`Token mint ${mint} was not found on ${cluster}.`);
   const data = getBase64Encoder().encode(value.data[0]);
   return { address: mint, label, decimals: data[DECIMALS_OFFSET]!, tokenProgram: value.owner };
 }

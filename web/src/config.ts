@@ -37,9 +37,13 @@ export const deployment = loadDeployment();
 export const rpcUrl: string =
   import.meta.env.VITE_RPC_URL ?? (cluster === "devnet" ? "https://api.devnet.solana.com" : "http://127.0.0.1:8899");
 
+// Production builds never fall back to localhost; an unset URL is reported as a configuration error.
 export const relayerUrl: string = (
-  import.meta.env.VITE_RELAYER_URL ?? deployment?.relayerUrl ?? "http://127.0.0.1:8787"
+  import.meta.env.VITE_RELAYER_URL ?? deployment?.relayerUrl ?? (import.meta.env.DEV ? "http://127.0.0.1:8787" : "")
 ).replace(/\/$/, "");
+
+export const faucets =
+  cluster === "devnet" ? { sol: "https://faucet.solana.com", usdc: "https://faucet.circle.com" } : null;
 
 export const walletChain = `solana:${cluster}` as const;
 

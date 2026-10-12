@@ -3,7 +3,7 @@ import { type ReactNode, useState } from "react";
 import { ActivityList } from "../components/Activity";
 import { Icon } from "../components/icons";
 import { Choice, Meter, Modal, PageHeader, Panel, useRunner } from "../components/ui";
-import { cluster, modelAlias } from "../config";
+import { cluster, faucets, modelAlias } from "../config";
 import { type AppData, isActive } from "../context";
 import { formatUnits, parseAmount, timeLeft } from "../format";
 import { useActivityFeed, useSessionUsage } from "../hooks";
@@ -176,7 +176,21 @@ export function Overview({ app }: { app: AppData }) {
             <button className="small" onClick={airdrop}>
               Airdrop 2 SOL
             </button>
+          ) : faucets ? (
+            <a className="banner-link" href={faucets.sol} target="_blank" rel="noreferrer">
+              Get devnet SOL <Icon name="external" size={14} />
+            </a>
           ) : null}
+        </div>
+      ) : null}
+
+      {faucets && mint.label === "USDC" && vault.wallet === 0n && vault.balance === 0n ? (
+        <div className="banner info">
+          <Icon name="wallet" />
+          <span>Your wallet has no devnet USDC yet. Circle's faucet sends free test USDC.</span>
+          <a className="banner-link" href={faucets.usdc} target="_blank" rel="noreferrer">
+            Get devnet USDC <Icon name="external" size={14} />
+          </a>
         </div>
       ) : null}
 

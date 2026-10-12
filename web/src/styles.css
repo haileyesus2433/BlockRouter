@@ -2068,3 +2068,17 @@ tr:last-child td {
     width: 76px;
   }
 }
+
+.banner.info {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.banner-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  color: inherit;
+  white-space: nowrap;
+}

@@ -82,20 +82,17 @@ export function Connect({ onDemo }: { onDemo: (identity: Identity) => void }) {
         {cluster === "localnet" ? (
           <>
             <div className="divider">
-              <span>or use a local demo wallet</span>
+              <span>or, for local development</span>
             </div>
             <div className="demo-actions">
-              <button className="primary block" onClick={() => fileInput.current?.click()}>
-                Load keypair file
+              <button className="block" onClick={() => fileInput.current?.click()}>
+                Use a keypair file
               </button>
               <button className="ghost block" onClick={async () => onDemo(await demoIdentity(await newDemoSecretKey(), true))}>
-                Create an empty one
+                Generate a throwaway wallet
               </button>
             </div>
-            <p className="hint">
-              Pick <code>keys/demo-user.json</code>; the seed script funded it with mock USDT. The key stays in this browser, so
-              never load a real wallet's key.
-            </p>
+            <p className="hint">Local chain only. The key is kept in this browser, so never use one that holds real funds.</p>
             <input
               ref={fileInput}
               type="file"
