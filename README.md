@@ -12,6 +12,7 @@ exact token usage at on-chain rates. Whatever a session does not spend goes back
 | | |
 |---|---|
 | Program ID | [`7maTNWbtCpuCXeRUVCNDR2a9YU7kaeUqtvrqz4ustyyi`](https://explorer.solana.com/address/7maTNWbtCpuCXeRUVCNDR2a9YU7kaeUqtvrqz4ustyyi?cluster=devnet) |
+| Web app | [blockrouter.netlify.app](https://blockrouter.netlify.app) |
 | Relayer | `https://blockrouter.onrender.com` (signer `k3WgqDZLVkKFdmUpFEJ16wketGbzDa6CYU1v1sdmow5`) |
 | USDC (Circle devnet) | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` |
 | Mock USDT | `FuLjr7GLgaa6Ciz24YPE1BQdJbmJXRp3AihgPSyEwmb7` |
