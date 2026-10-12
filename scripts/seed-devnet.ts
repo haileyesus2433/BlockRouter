@@ -162,14 +162,13 @@ async function main() {
   const provider = existingConfig.exists
     ? existingConfig.data.provider
     : address(process.env.PROVIDER ?? admin.payer.address);
-  await admin.sendTransaction([
-    await getCreateAssociatedTokenIdempotentInstructionAsync({
-      payer: admin.payer,
-      owner: provider,
-      mint: mockUsdt,
-    }),
-  ]);
-  console.log(`provider: token account ready for ${provider}`);
+  const payoutMints = [mockUsdt, ...(deployment.usdcMint ? [address(deployment.usdcMint)] : [])];
+  await admin.sendTransaction(
+    await Promise.all(
+      payoutMints.map((mint) => getCreateAssociatedTokenIdempotentInstructionAsync({ payer: admin.payer, owner: provider, mint })),
+    ),
+  );
+  console.log(`provider: token accounts ready for ${provider} (${payoutMints.length} mints)`);
 
   // 5. Demo vault funded with mock USDT
   const demoBalance = (await rpc.getBalance(demo.payer.address).send()).value;
