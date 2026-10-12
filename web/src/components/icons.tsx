@@ -20,6 +20,9 @@ const PATHS = {
   arrow: "M5 12h14M13 5l7 7-7 7",
   undo: "M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 8",
   menu: "M4 6h16M4 12h16M4 18h16",
+  sun: "M12 3v2M12 19v2M5.6 5.6 7 7M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4 7 17M17 7l1.4-1.4M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0",
+  moon: "M20.5 13.5A8.5 8.5 0 1 1 10.5 3.5a6.5 6.5 0 0 0 10 10z",
+  monitor: "M3 5a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM8 21h8M12 17v4",
 } as const;
 
 export type IconName = keyof typeof PATHS;

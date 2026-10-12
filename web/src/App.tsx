@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { listSessions, loadMint, type MintInfo, readChainTime, readVault, type SessionView, type VaultView } from "./chain";
 import { Connect } from "./components/Connect";
+import { ThemeSwitch } from "./components/ThemeSwitch";
 import { Icon, type IconName, Logo } from "./components/icons";
 import { Choice, Toasts, useToasts } from "./components/ui";
 import { cluster, deployment, relayerUrl } from "./config";
@@ -137,6 +138,7 @@ export function App() {
   if (!identity) {
     return (
       <>
+        <ThemeSwitch className="corner" />
         <Connect onDemo={setDemo} />
         <Toasts toasts={toasts} dismiss={dismiss} />
       </>
@@ -174,6 +176,10 @@ export function App() {
               value={mintChoice}
               onChange={setMintChoice}
             />
+          </div>
+          <div className="sidebar-section">
+            <span className="sidebar-label">Theme</span>
+            <ThemeSwitch />
           </div>
           <div className="account">
             <span className="account-avatar">{identity.address.slice(0, 2)}</span>

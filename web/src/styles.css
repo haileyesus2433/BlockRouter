@@ -29,8 +29,9 @@
   color-scheme: light;
 }
 
+/* Dark follows the OS unless the person picked light; an explicit dark choice wins either way. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #09090e;
     --surface: #121219;
     --surface-2: #181821;
@@ -56,6 +57,33 @@
     --hero: linear-gradient(135deg, #3b2fc9 0%, #5b3fd6 45%, #8a3fd9 100%);
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #09090e;
+  --surface: #121219;
+  --surface-2: #181821;
+  --surface-3: #20202b;
+  --border: #23232e;
+  --border-strong: #30303d;
+  --text: #ececf4;
+  --muted: #8a8ca0;
+  --accent: #8b7cff;
+  --accent-hover: #9d90ff;
+  --accent-text: #0b0b12;
+  --accent-soft: #1d1a36;
+  --accent-line: #3a3370;
+  --ok: #3dd49b;
+  --ok-soft: #10261e;
+  --bad: #ff6b6b;
+  --bad-soft: #2c1416;
+  --warn: #f2b84b;
+  --warn-soft: #2a2010;
+  --shadow-sm: none;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset;
+  --shadow-lg: 0 24px 64px -12px rgb(0 0 0 / 0.7);
+  --hero: linear-gradient(135deg, #3b2fc9 0%, #5b3fd6 45%, #8a3fd9 100%);
+  color-scheme: dark;
 }
 
 * {
@@ -1747,6 +1775,16 @@ tr:last-child td {
     display: none;
   }
 
+  .sidebar-foot .choices {
+    flex-wrap: nowrap;
+    padding: 3px;
+  }
+
+  .sidebar-section .choice {
+    flex: none;
+    padding: 5px 9px;
+  }
+
   .account {
     padding: 4px;
     gap: 4px;
@@ -2048,4 +2086,17 @@ tr:last-child td {
   font-weight: 600;
   color: inherit;
   white-space: nowrap;
+}
+
+.theme-switch .choice {
+  display: grid;
+  place-items: center;
+  padding: 6px 10px;
+}
+
+.theme-switch.corner {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
 }
