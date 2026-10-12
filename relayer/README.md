@@ -38,7 +38,9 @@ names:
 Keys never go in the file. Every alias must be registered on-chain in the deployment, because that
 is where its price lives; models with no provider are hidden from `/v1/models` and refused. For a
 single provider, `UPSTREAM_BASE_URL`, `UPSTREAM_API_KEY`, and `UPSTREAM_MODELS` still work. With no
-upstream configured, the deterministic mock provider answers every model.
+upstream configured, the deterministic mock provider answers every model on localnet; elsewhere the
+relayer refuses to start unless `ALLOW_MOCK_PROVIDER=1`, so real sessions are never billed for canned
+replies.
 
 The relayer keypair (`RELAYER_KEYPAIR`) signs settlements only. Sessions must be opened with
 `--relayer <its address>`, which is printed at startup.

@@ -88,8 +88,9 @@ for (const [name, env, message] of [
 }
 
 test("config accepts localhost and explicit IPs", () => {
-  assert.equal(loadConfig({ CLUSTER: "devnet", HOST: "localhost" }).host, "localhost");
-  assert.equal(loadConfig({ CLUSTER: "devnet", HOST: "0.0.0.0", PORT: "3000" }).port, 3000);
+  const devnet = { CLUSTER: "devnet", ALLOW_MOCK_PROVIDER: "1" };
+  assert.equal(loadConfig({ ...devnet, HOST: "localhost" }).host, "localhost");
+  assert.equal(loadConfig({ ...devnet, HOST: "0.0.0.0", PORT: "3000" }).port, 3000);
 });
 
 test("startup failures exit non-zero without revealing secrets", () => {
@@ -105,7 +106,7 @@ test("startup failures exit non-zero without revealing secrets", () => {
 
   const missingKey = spawnSync(process.execPath, ["--import", "tsx", server], {
     encoding: "utf8",
-    env: { ...process.env, CLUSTER: "devnet", RELAYER_KEYPAIR: `/nonexistent/${SECRET}.json` },
+    env: { ...process.env, CLUSTER: "devnet", ALLOW_MOCK_PROVIDER: "1", RELAYER_KEYPAIR: `/nonexistent/${SECRET}.json` },
     cwd: fileURLToPath(new URL("..", import.meta.url)),
   });
   assert.notEqual(missingKey.status, 0);

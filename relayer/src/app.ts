@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 
 import type { Chain } from "./chain/types";
@@ -25,6 +26,8 @@ export type Deps = {
   nowSecs: () => number;
 };
 
+const MAX_BODY_BYTES = 8 * 1024 * 1024;
+
 export function createApp(deps: Deps) {
   const app = new Hono();
 
@@ -43,6 +46,15 @@ export function createApp(deps: Deps) {
       allowHeaders: ["Authorization", "Content-Type", "X-BlockRouter-Address", "X-BlockRouter-Timestamp", "X-BlockRouter-Signature", "X-BlockRouter-Source"],
       allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
       exposeHeaders: ["X-BlockRouter-Session", "X-BlockRouter-Charge", "X-BlockRouter-Remaining", "X-BlockRouter-Session-Expires"],
+    }),
+  );
+
+  // Coding agents send whole files as context, so this is generous, but it still bounds memory per request.
+  app.use(
+    "/v1/*",
+    bodyLimit({
+      maxSize: MAX_BODY_BYTES,
+      onError: (c) => errorResponse(c, new ApiError(413, "invalid_request_error", "request_too_large", "request body is over 8 MB")),
     }),
   );
 

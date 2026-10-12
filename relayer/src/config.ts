@@ -81,6 +81,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     }
   }
   const hasProviders = Object.keys(providers).length > 0;
+  const rpcUrl = validateUrl(env.RPC_URL ?? RPC_URLS[cluster], "RPC_URL");
+  // The mock provider bills real sessions for canned replies, so it is opt-in off the local chain.
+  if (!hasProviders && cluster !== "localnet" && env.ALLOW_MOCK_PROVIDER !== "1") {
+    throw new ConfigurationError("no upstream provider configured: set PROVIDERS_FILE or UPSTREAM_*, or ALLOW_MOCK_PROVIDER=1");
+  }
   const models: ModelAlias[] = deployed.map((model) => {
     const route = routes[model.alias];
     return {
@@ -96,7 +101,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     host,
     port,
     cluster,
-    rpcUrl: validateUrl(env.RPC_URL ?? RPC_URLS[cluster], "RPC_URL"),
+    rpcUrl,
     relayerKeypair: env.RELAYER_KEYPAIR ?? "keys/relayer.json",
     dbPath: env.DB_PATH ?? "relayer.db",
     models,
@@ -107,7 +112,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     rateLimitPerMinute: int(env, "RATE_LIMIT_PER_MINUTE", 60),
     corsOrigins: (env.CORS_ORIGINS ?? "http://localhost:5173,http://127.0.0.1:5173")
       .split(",")
-      .map((origin) => origin.trim())
+      .map((origin) => origin.trim().replace(/\/+$/, ""))
       .filter(Boolean),
     providers,
   };
