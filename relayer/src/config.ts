@@ -138,11 +138,8 @@ function legacyUpstream(env: NodeJS.ProcessEnv, deployed: { alias: string }[]): 
   return { providers: { upstream: { baseUrl: validateUrl(baseUrl, "UPSTREAM_BASE_URL"), apiKey } }, routes };
 }
 
-/**
- * PROVIDERS_FILE: { "providers": { "<id>": { "baseUrl", "apiKeyEnv" } },
- *                   "models": { "<alias>": { "provider", "upstream" } } }
- * Keys stay in the environment; the file only names the variable.
- */
+// PROVIDERS_FILE: { providers: { <id>: { baseUrl, apiKeyEnv } }, models: { <alias>: { provider, upstream } } }.
+// Keys stay in the environment; the file only names the variable.
 function loadProvidersFile(env: NodeJS.ProcessEnv): Providers {
   if (env.UPSTREAM_BASE_URL || env.UPSTREAM_API_KEY) {
     throw new ConfigurationError("use either PROVIDERS_FILE or UPSTREAM_BASE_URL/UPSTREAM_API_KEY, not both");

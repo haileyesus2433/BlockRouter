@@ -139,9 +139,8 @@ export class SettlementWorker {
   }
 }
 
-// The program rejects a charge above the reservation, which would leave the session unbillable.
-// If usage overran (the provider counted more prompt tokens than estimated), bill lines in order
-// until the reservation is used up and absorb the rest. Never more than was used.
+// The program rejects a charge above the reservation, so overrun usage is billed line by line up to
+// the reservation and the rest is absorbed. Never more than was used.
 export function fitToReservation(
   lines: ModelUsageRecord[],
   reservedAmount: bigint,
@@ -177,9 +176,8 @@ function fitLine(
   return { promptTokens, completionTokens: fit < completionTokens ? fit : completionTokens };
 }
 
-// A fixed window would settle short sessions on their first request. Use the configured window,
-// capped at a quarter of the life the session had at first use, but never shorter than it takes
-// the worker to notice and land a settlement.
+// The configured window, capped at a quarter of the session's life at first use so short sessions
+// are not settled on their first request, but never shorter than the worker needs to settle.
 export function expiryWindow(config: Config, session: SessionState, usage: UsageRecord): bigint {
   const floor = BigInt(config.workerTickSecs * 2 + 30);
   const lifetimeAtFirstUse = session.expiresAt - BigInt(usage.firstUsageAt);

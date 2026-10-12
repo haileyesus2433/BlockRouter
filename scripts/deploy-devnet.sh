@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# Deploys or upgrades the BlockRouter program on devnet, then publishes the IDL.
-#
-#   ./scripts/deploy-devnet.sh                  # uses keys/devnet-deployer.json
-#   WALLET=path/to/key.json ./scripts/deploy-devnet.sh
-#
-# WALLET pays and becomes the upgrade authority, which is also the only key that
-# can run initialize_config. PROGRAM_KEYPAIR is only needed for the first deploy.
+# Deploys or upgrades the program on devnet and publishes the IDL. WALLET (default
+# keys/devnet-deployer.json) pays and becomes the upgrade authority.
 
 set -euo pipefail
 
