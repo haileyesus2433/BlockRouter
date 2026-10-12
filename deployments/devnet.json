@@ -3,8 +3,8 @@
   "programId": "7maTNWbtCpuCXeRUVCNDR2a9YU7kaeUqtvrqz4ustyyi",
   "usdcMint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
   "mockUsdtMint": "FuLjr7GLgaa6Ciz24YPE1BQdJbmJXRp3AihgPSyEwmb7",
-  "relayer": null,
-  "relayerUrl": null,
+  "relayer": "k3WgqDZLVkKFdmUpFEJ16wketGbzDa6CYU1v1sdmow5",
+  "relayerUrl": "https://blockrouter.onrender.com",
   "config": {
     "feeBps": 250,
     "disputeWindowSecs": 86400,
