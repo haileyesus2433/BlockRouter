@@ -165,6 +165,17 @@ function affordableCompletion(remaining: bigint, promptTokens: bigint, rates: Ra
   return budget / rates.completionRate;
 }
 
+/** A coarse client label for the activity log; the raw user agent is not stored. */
+export function clientLabel(source: string | undefined, userAgent: string | undefined): string {
+  if (source && /^[a-z0-9-]{1,32}$/i.test(source)) return source.toLowerCase();
+  const ua = (userAgent ?? "").toLowerCase();
+  if (ua.includes("opencode")) return "opencode";
+  if (ua.startsWith("curl/")) return "curl";
+  if (ua.includes("ai-sdk")) return "ai-sdk";
+  if (ua.includes("openai/")) return "openai-sdk";
+  return "other";
+}
+
 export function chatRoutes(deps: Deps) {
   const routes = new Hono();
   const limiter = new RateLimiter(deps.config.rateLimitPerMinute);
@@ -175,6 +186,7 @@ export function chatRoutes(deps: Deps) {
     const body = parseBody(await c.req.json().catch(() => null));
     const active = await deps.ledger.resolve(key);
     const choice = deps.ledger.choose(active, body.model);
+    const client = clientLabel(c.req.header("X-BlockRouter-Source"), c.req.header("User-Agent"));
 
     const rates = worstCaseRates(choice.model);
     const request: ChatRequest = {
@@ -215,6 +227,16 @@ export function chatRoutes(deps: Deps) {
       );
       const after = deps.ledger.pendingCharge(deps.store.getUsage(sessionKey), active.models);
       log(active, choice, usage, estimatedPrompt, after - before);
+      deps.store.logRequest({
+        sessionPubkey: sessionKey,
+        keyId: key.id,
+        modelId: choice.alias.id,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        charge: after - before,
+        client,
+        createdAt: deps.nowSecs(),
+      });
       return after - before;
     };
 
