@@ -521,38 +521,6 @@ details[open] summary {
   flex: 1;
 }
 
-.status-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0 8px;
-  font-size: 0.84rem;
-  color: var(--muted);
-}
-
-.status-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.dot.ok {
-  background: var(--ok);
-  box-shadow: 0 0 0 3px var(--ok-soft);
-}
-
-.dot.bad {
-  background: var(--bad);
-  box-shadow: 0 0 0 3px var(--bad-soft);
-}
-
 .account {
   display: flex;
   align-items: center;
@@ -1775,7 +1743,6 @@ tr:last-child td {
   }
 
   .sidebar-label,
-  .status-list,
   .account-text {
     display: none;
   }

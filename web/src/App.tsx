@@ -175,14 +175,6 @@ export function App() {
               onChange={setMintChoice}
             />
           </div>
-          <div className="status-list">
-            <span className="status-line">
-              <span className="dot ok" /> {cluster}
-            </span>
-            <span className="status-line" title={relayerUrl}>
-              <span className={relayer ? "dot ok" : "dot bad"} /> {relayer ? "Relayer online" : "Relayer offline"}
-            </span>
-          </div>
           <div className="account">
             <span className="account-avatar">{identity.address.slice(0, 2)}</span>
             <div className="account-text">
